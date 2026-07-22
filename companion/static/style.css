@@ -94,6 +94,7 @@ body {
 .btn-icon { padding: 8px 10px; }
 .btn.listening { background: var(--err); border-color: var(--err); animation: pulse 1s infinite; }
 .btn.active { background: var(--accent2); border-color: var(--accent2); color: #0a1526; font-weight: 600; }
+.btn.recording { background: var(--err); border-color: var(--err); animation: pulse 1s infinite; }
 
 /* ---------- Memory pill ---------- */
 .mem-pill {

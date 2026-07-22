@@ -27,6 +27,9 @@ Suite de pruebas de humo ejecutada contra el servidor real (sin robot físico):
 - **Sistema emocional** — 7 emociones (feliz, triste, curioso, emocionado, cansado, aburrido, asustado) que cambian luces, animaciones y el prompt del LLM. Se aburre si lo ignoras.
 - **Modo mascota autónomo 🐾** — si lo activas y nadie juega con él, Cozmo actúa por su cuenta según su estado de ánimo: explora cuando está curioso, baila cuando está feliz, pide atención cuando se aburre, baja la cabeza cuando tiene sueño... Nunca interrumpe: detecta cuándo estás interactuando.
 - **Memoria persistente 🧠** — SQLite guarda cada conversación, comando y evento en `data/companion.db`. Las últimas interacciones se inyectan en el prompt del LLM: **Cozmo recuerda de qué hablabais**, incluso entre sesiones. Contador en la UI con botón de borrado.
+- **Grabación de video ⏺️** — graba lo que ve Cozmo en MP4 (OpenCV) o GIF (fallback con Pillow). Se guarda en `recordings/` y se sirve en `/recordings/<archivo>`.
+- **Detección de caras 👤** — OpenCV (Haar cascades incluidos, sin descargas). Cuando Cozmo te ve aparecer, se emociona, lo anuncia y **gira para mirarte** si estás descentrado. Con histéresis anti-parpadeo.
+- **Wake-word 🗣️** — escucha continua offline con Vosk: di **«Cozmo»** seguido de un comando (*"¡Cozmo, baila!"*) o solo *"Cozmo"* para que responda *"¿Sí?"*. Sin nubes, sin APIs externas.
 - **Fotos** — captura desde la cámara de Cozmo: se guardan en `photos/` y se descargan al navegador.
 - **UI bilingüe** — español/inglés con un clic (botón EN/ES).
 
@@ -48,7 +51,9 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 | `companion/llm.py` | Cliente Ollama con urllib (cero dependencias extra) + personalidades |
 | `companion/memory.py` | SQLite: interacciones persistentes + contexto conversacional para el LLM |
 | `companion/pet_mode.py` | Hilo de comportamiento autónomo guiado por la emoción actual |
-| `companion/stt.py` | Hilo Vosk push-to-talk; imports perezosos (la app funciona sin micrófono) |
+| `companion/perception.py` | Detección de caras con Haar cascades + cálculo de giro para centrarse |
+| `companion/recorder.py` | Grabación de video: MP4 con OpenCV, GIF animado con Pillow |
+| `companion/stt.py` | Hilo Vosk: push-to-talk y modo continuo para wake-word |
 | `companion/commands.py` | Parser bilingüe con números escritos (uno..diez / one..ten) y colores |
 | `companion/config.py` | Dataclass + variables de entorno `COZMO_*` + descubrimiento de modelo Vosk |
 | `companion/static/` | UI vanilla JS/CSS/HTML — sin build, sin frameworks |
@@ -59,6 +64,7 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 2. **Windows: [Npcap](https://npcap.com)** — necesario para la captura de paquetes de pycozmo. Linux: ejecutar con `sudo` o capabilities de red (`setcap`).
 3. **Opcional — IA:** [Ollama](https://ollama.com) + `ollama pull phi3`.
 4. **Opcional — voz:** micrófono + modelo Vosk (ver abajo).
+5. **Opcional — visión:** `opencv-python-headless<5` (ya en requirements) para detección de caras y video MP4. Sin OpenCV la app funciona igual, grabando GIFs.
 
 ## 🚀 Instalación y ejecución
 
@@ -136,6 +142,7 @@ cozmo-companion/
 ├── requirements.txt
 ├── LICENSE                 # GPL v3
 ├── photos/                 # fotos capturadas (git-ignored)
+├── recordings/             # videos grabados (git-ignored)
 ├── models/                 # (opcional) modelos Vosk (git-ignored)
 ├── data/                   # memoria SQLite (git-ignored)
 └── companion/
@@ -147,6 +154,8 @@ cozmo-companion/
     ├── llm.py
     ├── memory.py
     ├── pet_mode.py
+    ├── perception.py
+    ├── recorder.py
     ├── stt.py
     ├── commands.py
     └── static/
@@ -176,9 +185,12 @@ cozmo-companion/
 
 - [x] ~~Modo mascota autónomo (idle behaviors según emoción)~~ — v1.1.0
 - [x] ~~Memoria persistente de conversaciones (SQLite)~~ — v1.1.0
-- [ ] Grabación de video
-- [ ] Detección de objetos con la cámara
-- [ ] Wake-word ("¡Cozmo!") sin pulsar botón
+- [x] ~~Grabación de video~~ — v1.2.0 (MP4/GIF)
+- [x] ~~Detección de caras con la cámara~~ — v1.2.0 (reacciona y te mira)
+- [x] ~~Wake-word ("¡Cozmo!") sin pulsar botón~~ — v1.2.0 (Vosk continuo, offline)
+- [ ] Detección de objetos genérica (YOLO/DNN)
+- [ ] Reconocimiento de caras con nombres
+- [ ] Triggers automáticos por eventos (cara → foto, batería baja → aviso)
 
 ## Créditos
 

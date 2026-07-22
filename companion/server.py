@@ -13,6 +13,7 @@ import asyncio
 import base64
 import json
 import logging
+import random
 import time
 from pathlib import Path
 from typing import Optional, Set
@@ -27,7 +28,9 @@ from .config import Config
 from .emotions import EmotionState, emotion_list
 from .llm import OllamaClient
 from .memory import KIND_COMMAND, KIND_COZMO, KIND_EVENT, KIND_USER, Memory
+from .perception import FaceDetector, faces_available, turn_angle_for_face
 from .pet_mode import PetMode
+from .recorder import VideoRecorder
 from .robot import Robot
 from .stt import VoskListener, stt_available
 
@@ -59,6 +62,15 @@ LOG_STRINGS = {
         "pet_on": "Modo mascota activado 🐾",
         "pet_off": "Modo mascota desactivado",
         "memory_cleared": "Memoria borrada 🧠✕",
+        "wake_on": "Wake-word activado: di «Cozmo» seguido de un comando 🗣️",
+        "wake_off": "Wake-word desactivado",
+        "wake_busy": "El wake-word ya está escuchando; pulsa el 🎤 para parar",
+        "faces_on": "Detección de caras activada 👤",
+        "faces_off": "Detección de caras desactivada",
+        "face_seen": "¡Te veo! 👤",
+        "rec_on": "⏺️ Grabando video...",
+        "rec_saved": "🎬 Video guardado",
+        "rec_empty": "No hay frames que guardar (¿cámara activada?)",
     },
     "en": {
         "connecting": "Connecting to Cozmo over WiFi...",
@@ -72,7 +84,22 @@ LOG_STRINGS = {
         "pet_on": "Pet mode enabled 🐾",
         "pet_off": "Pet mode disabled",
         "memory_cleared": "Memory cleared 🧠✕",
+        "wake_on": "Wake-word enabled: say \"Cozmo\" followed by a command 🗣️",
+        "wake_off": "Wake-word disabled",
+        "wake_busy": "Wake-word is already listening; press 🎤 to stop",
+        "faces_on": "Face detection enabled 👤",
+        "faces_off": "Face detection disabled",
+        "face_seen": "I can see you! 👤",
+        "rec_on": "⏺️ Recording video...",
+        "rec_saved": "🎬 Video saved",
+        "rec_empty": "No frames to save (is the camera on?)",
     },
+}
+
+WAKE_WORDS = ("cozmo", "cosmo")
+WAKE_ACKS = {
+    "es": ["¿Sí?", "¿Dime?", "¿Qué pasa?"],
+    "en": ["Yes?", "I'm listening", "What is it?"],
 }
 
 
@@ -99,20 +126,48 @@ class Hub:
         )
 
         self._stt_available = stt_available(config.vosk_model)
-        self.stt: Optional[VoskListener] = None
-        if self._stt_available:
-            self.stt = VoskListener(
-                config.vosk_model,
-                on_partial=lambda t: self.broadcast_ts({"type": "stt", "state": "listening", "partial": t}),
-                on_final=lambda t: self.broadcast_ts({"type": "stt", "state": "off", "final": t})
-                and self._run_coro(self._on_voice_final(t)),
-                on_state=lambda on: self.broadcast_ts({"type": "stt", "state": "listening" if on else "off"}),
-                on_error=lambda m: self.send_error_ts(m),
-            )
+        self.stt: Optional[VoskListener] = self._make_listener(continuous=False)
+        self.stt_wake: Optional[VoskListener] = None  # created on demand
+        self.wake_mode = False
+
+        # Video recording + face detection
+        self.recorder = VideoRecorder(fps=config.camera_fps)
+        self._faces_available = faces_available()
+        self._face_detector: Optional[FaceDetector] = None
+        if self._faces_available:
+            try:
+                self._face_detector = FaceDetector()
+            except RuntimeError as e:
+                log.warning("Face detector disabled: %s", e)
+                self._faces_available = False
+        self.faces_enabled = False
+        self._face_present = False
+        self._face_absent_checks = 0
+        self._face_task = None
 
         self._llm_ok = False
         self._llm_checked = 0.0
         self._tasks = []
+
+    def _make_listener(self, continuous: bool) -> Optional[VoskListener]:
+        """Build a Vosk listener; continuous mode is used for the wake-word."""
+        if not self._stt_available:
+            return None
+        if continuous:
+            return VoskListener(
+                self.config.vosk_model,
+                continuous=True,
+                on_final=lambda t: self._run_coro(self._on_wake_utterance(t)),
+                on_error=lambda m: self.send_error_ts(m),
+            )
+        return VoskListener(
+            self.config.vosk_model,
+            on_partial=lambda t: self.broadcast_ts({"type": "stt", "state": "listening", "partial": t}),
+            on_final=lambda t: self.broadcast_ts({"type": "stt", "state": "off", "final": t})
+            and self._run_coro(self._on_voice_final(t)),
+            on_state=lambda on: self.broadcast_ts({"type": "stt", "state": "listening" if on else "off"}),
+            on_error=lambda m: self.send_error_ts(m),
+        )
 
     # ------------------------------------------------------------------
     # Strings
@@ -179,6 +234,10 @@ class Hub:
             "llm_model": self.llm.model,
             "pet_mode": self.pet.running,
             "memory_count": self.memory.count(),
+            "recording": self.recorder.recording,
+            "faces_available": self._faces_available,
+            "faces_enabled": self.faces_enabled and self._faces_available,
+            "wake_mode": self.wake_mode,
             "personality": self.llm.personality,
             "personality_display": self.llm.personality_display(self.lang),
             "personalities": self.llm.list_personalities(self.lang),
@@ -251,6 +310,28 @@ class Hub:
             await self.execute_command(cmd)
         else:
             await self.handle_chat(text)
+
+    async def _on_wake_utterance(self, text: str) -> None:
+        """Continuous listening: only react when the wake word is present."""
+        lower = text.lower()
+        wake = next((w for w in WAKE_WORDS if w in lower), None)
+        if wake is None:
+            return
+        self.emotions.interact()
+        remainder = lower.split(wake, 1)[1].strip(" ,.!?¿¡")
+        if not remainder:
+            ack = random.choice(WAKE_ACKS[self.lang])
+            await self.broadcast({"type": "chat", "role": "cozmo", "text": ack})
+            if self.robot.connected:
+                self.robot.submit(self._safe(self.robot.say, ack))
+            return
+        await self.broadcast({"type": "chat", "role": "user", "text": remainder, "via": "voice"})
+        cmd = parse(remainder)
+        if cmd:
+            await self.log_to_ui(f"🗣️ {cmd.describe(self.lang)}")
+            await self.execute_command(cmd)
+        else:
+            await self.handle_chat(remainder)
 
     # ------------------------------------------------------------------
     # Command execution
@@ -418,6 +499,25 @@ class Hub:
                 await self.log_to_ui(f"{self.t('cmd_not_recognized')}: «{text}»", "warn")
         elif action == "stt":
             self._toggle_stt(bool(msg.get("enabled", True)))
+        elif action == "wake":
+            self._toggle_wake(bool(msg.get("enabled", True)))
+        elif action == "faces":
+            self._toggle_faces(bool(msg.get("enabled", True)))
+        elif action == "record":
+            if bool(msg.get("enabled")):
+                self.recorder.start()
+                await self.log_to_ui(self.t("rec_on"), "ok")
+                await self.broadcast(self.status())
+            else:
+                loop = asyncio.get_running_loop()
+                path = await loop.run_in_executor(None, self._stop_recording)
+                if path:
+                    await self.log_to_ui(f"{self.t('rec_saved')}: {path.name}", "ok")
+                    await self.broadcast({"type": "recording_saved", "file": path.name,
+                                          "url": f"/recordings/{path.name}"})
+                else:
+                    await self.log_to_ui(self.t("rec_empty"), "warn")
+                await self.broadcast(self.status())
         elif action == "pet":
             self._toggle_pet(bool(msg.get("enabled", True)))
         elif action == "memory_clear":
@@ -453,10 +553,56 @@ class Hub:
         if not self.stt:
             self.broadcast_ts({"type": "error", "message": self.t("stt_unavailable")})
             return
+        if enabled and self.wake_mode:
+            self.broadcast_ts({"type": "log", "level": "warn", "message": self.t("wake_busy")})
+            return
         if enabled:
             self.stt.start_listening()
         else:
             self.stt.stop_listening()
+
+    def _toggle_wake(self, enabled: bool) -> None:
+        if not self._stt_available:
+            self.broadcast_ts({"type": "error", "message": self.t("stt_unavailable")})
+            return
+        if enabled:
+            if self.stt and self.stt.listening:
+                self.stt.stop_listening()
+            if self.stt_wake is None:
+                self.stt_wake = self._make_listener(continuous=True)
+            if self.stt_wake:
+                self.stt_wake.start_listening()
+            self.wake_mode = True
+        else:
+            if self.stt_wake:
+                self.stt_wake.stop_listening()
+            self.wake_mode = False
+        self.broadcast_ts({
+            "type": "log",
+            "level": "ok" if enabled else "info",
+            "message": self.t("wake_on") if enabled else self.t("wake_off"),
+        })
+        self.broadcast_ts(self.status())
+
+    def _toggle_faces(self, enabled: bool) -> None:
+        if enabled and not self._faces_available:
+            self.broadcast_ts({"type": "error", "message": "opencv-python-headless no instalado"})
+            return
+        self.faces_enabled = enabled
+        if not enabled:
+            self._face_present = False
+            self._face_absent_checks = 0
+        self.broadcast_ts({
+            "type": "log",
+            "level": "ok" if enabled else "info",
+            "message": self.t("faces_on") if enabled else self.t("faces_off"),
+        })
+        self.broadcast_ts(self.status())
+
+    def _stop_recording(self) -> Optional[Path]:
+        """Runs in an executor; encodes the collected frames."""
+        filename = f"cozmo_{int(time.time())}"
+        return self.recorder.stop(self.config.recordings_dir / filename)
 
     def _toggle_pet(self, enabled: bool) -> None:
         if enabled:
@@ -481,6 +627,7 @@ class Hub:
 
     async def _camera_loop(self) -> None:
         interval = 1.0 / max(self.config.camera_fps, 1.0)
+        face_future = None
         while True:
             try:
                 if self.clients and self.robot.connected and self.robot.camera_enabled:
@@ -490,9 +637,38 @@ class Hub:
                             "type": "camera",
                             "image": base64.b64encode(data).decode(),
                         })
+                        if self.recorder.recording:
+                            self.recorder.add_frame(data)
+                        if self.faces_enabled and self._face_detector:
+                            if face_future is not None and face_future.done():
+                                faces, (width, _h) = face_future.result()
+                                face_future = None
+                                await self._on_faces(faces, width)
+                            if face_future is None:
+                                loop = asyncio.get_running_loop()
+                                face_future = loop.run_in_executor(
+                                    None, self._face_detector.detect_jpeg, data
+                                )
             except Exception:  # noqa: BLE001
                 log.exception("camera loop error")
             await asyncio.sleep(interval)
+
+    async def _on_faces(self, faces, width: int) -> None:
+        """React to face presence changes (with hysteresis against flicker)."""
+        if faces:
+            self._face_absent_checks = 0
+            if not self._face_present:
+                self._face_present = True
+                await self.log_to_ui(self.t("face_seen"), "ok")
+                self.memory.add(KIND_EVENT, "vi una cara", lang=self.lang)
+                self.emotions.set("excited", reason="face seen")
+                angle = turn_angle_for_face(faces[0], width)
+                if angle is not None and self.robot.connected:
+                    self.robot.submit(self._safe(self.robot.turn, angle))
+        else:
+            self._face_absent_checks += 1
+            if self._face_absent_checks >= 4:
+                self._face_present = False
 
     async def _status_loop(self) -> None:
         while True:
@@ -514,11 +690,14 @@ def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="Cozmo Companion", version=__version__)
     hub = Hub(config)
     app.state.hub = hub
+    # Must exist before the StaticFiles mounts below.
+    config.recordings_dir.mkdir(parents=True, exist_ok=True)
 
     @app.on_event("startup")
     async def _startup() -> None:
         hub.loop = asyncio.get_running_loop()
         config.photos_dir.mkdir(parents=True, exist_ok=True)
+        config.recordings_dir.mkdir(parents=True, exist_ok=True)
         hub._llm_ok = hub.llm.is_reachable()
         hub._llm_checked = time.time()
         hub._tasks = [
@@ -534,6 +713,8 @@ def create_app(config: Config) -> FastAPI:
             task.cancel()
         if hub.stt:
             hub.stt.stop_listening()
+        if hub.stt_wake:
+            hub.stt_wake.stop_listening()
         hub.pet.stop()
         hub.robot.shutdown()
         hub.memory.close()
@@ -545,6 +726,14 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/api/health")
     async def health():
         return {"status": "ok", "version": __version__}
+
+    @app.get("/api/recordings")
+    async def recordings():
+        files = sorted(
+            (p.name for p in config.recordings_dir.glob("*.*") if p.suffix in (".mp4", ".gif")),
+            reverse=True,
+        )
+        return {"files": files}
 
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
@@ -565,4 +754,5 @@ def create_app(config: Config) -> FastAPI:
             hub.clients.discard(ws)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount("/recordings", StaticFiles(directory=config.recordings_dir), name="recordings")
     return app

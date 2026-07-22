@@ -34,7 +34,9 @@
       <h2 data-i18n="camera">Cámara</h2>
       <div class="row">
         <button class="btn btn-small" id="btn-camera" disabled data-i18n="cam_on">Activar</button>
-        <button class="btn btn-small" id="btn-photo" disabled>📸</button>
+        <button class="btn btn-small" id="btn-photo" disabled title="Foto">📸</button>
+        <button class="btn btn-small" id="btn-record" disabled title="Grabar video">⏺️</button>
+        <button class="btn btn-small" id="btn-faces" disabled title="Detección de caras" style="display:none">👤</button>
       </div>
     </div>
     <div class="camera-box">
@@ -90,6 +92,7 @@
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-row">
       <input type="text" id="chat-input" data-i18n-ph="chat_ph" placeholder="Escríbele algo a Cozmo...">
+      <button class="btn btn-icon" id="btn-wake" style="display:none" title="Wake-word: di «Cozmo»...">🗣️</button>
       <button class="btn btn-icon" id="btn-mic" style="display:none" title="Voz">🎤</button>
       <button class="btn btn-primary" id="btn-chat-send">➤</button>
     </div>

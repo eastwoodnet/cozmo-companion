@@ -36,7 +36,14 @@ def stt_available(model_path: Optional[Union[str, Path]]) -> bool:
 
 
 class VoskListener:
-    """Push-to-talk style offline recognizer running in its own thread."""
+    """Offline recognizer running in its own thread.
+
+    Two modes:
+    - Push-to-talk (default): stops after the first complete utterance or
+      after MAX_LISTEN_SECONDS.
+    - Continuous (wake-word): keeps listening until stop_listening() is
+      called, emitting every complete utterance through on_final.
+    """
 
     def __init__(
         self,
@@ -45,12 +52,14 @@ class VoskListener:
         on_final: Optional[Callable[[str], None]] = None,
         on_state: Optional[Callable[[bool], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
+        continuous: bool = False,
     ) -> None:
         self._model_path = str(model_path)
         self._on_partial = on_partial
         self._on_final = on_final
         self._on_state = on_state
         self._on_error = on_error
+        self._continuous = continuous
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._listening = False
@@ -118,9 +127,8 @@ class VoskListener:
             self._set_listening(True)
 
             started = time.time()
-            final_text = ""
             while not self._stop.is_set():
-                if time.time() - started > MAX_LISTEN_SECONDS:
+                if not self._continuous and time.time() - started > MAX_LISTEN_SECONDS:
                     log.info("Listen timeout reached")
                     break
                 try:
@@ -128,9 +136,13 @@ class VoskListener:
                 except OSError:
                     break
                 if recognizer.AcceptWaveform(data):
-                    result = json.loads(recognizer.Result())
-                    final_text = result.get("text", "").strip()
-                    if final_text:
+                    final_text = json.loads(recognizer.Result()).get("text", "").strip()
+                    if final_text and self._on_final:
+                        try:
+                            self._on_final(final_text)
+                        except Exception:  # noqa: BLE001
+                            log.exception("stt final callback failed")
+                    if final_text and not self._continuous:
                         break
                 else:
                     partial = json.loads(recognizer.PartialResult()).get("partial", "").strip()
@@ -139,12 +151,6 @@ class VoskListener:
                             self._on_partial(partial)
                         except Exception:  # noqa: BLE001
                             pass
-
-            if final_text and self._on_final:
-                try:
-                    self._on_final(final_text)
-                except Exception:  # noqa: BLE001
-                    log.exception("stt final callback failed")
         except Exception as e:  # noqa: BLE001
             self._error(str(e) or e.__class__.__name__)
         finally:

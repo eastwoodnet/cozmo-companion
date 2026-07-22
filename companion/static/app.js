@@ -85,6 +85,7 @@ function handleMessage(msg) {
     case "chat": addChat(msg.role, msg.text, msg.via); break;
     case "stt": onSTT(msg); break;
     case "photo": onPhoto(msg); break;
+    case "recording_saved": log(`🎬 ${msg.file} → ${msg.url}`, "ok"); break;
     case "pong": break;
   }
 }
@@ -130,6 +131,14 @@ function onStatus(s) {
   $("btn-pet").classList.toggle("active", !!s.pet_mode);
   if (s.memory_count !== undefined) $("mem-count").textContent = s.memory_count;
 
+  // Recording + faces + wake-word
+  $("btn-record").classList.toggle("recording", !!s.recording);
+  $("btn-faces").style.display = s.faces_available ? "" : "none";
+  $("btn-faces").classList.toggle("active", !!s.faces_enabled);
+  $("btn-wake").style.display = s.stt_available ? "" : "none";
+  $("btn-wake").classList.toggle("active", !!s.wake_mode);
+  $("btn-mic").disabled = !!s.wake_mode;
+
   // Camera button
   cameraOn = !!s.camera;
   $("btn-camera").textContent = cameraOn ? t("cam_off") : t("cam_on");
@@ -152,7 +161,7 @@ function updateConnUI() {
 }
 
 function enableControls(on) {
-  ["btn-camera", "btn-photo", "btn-dance", "btn-look", "btn-stop",
+  ["btn-camera", "btn-photo", "btn-record", "btn-faces", "btn-dance", "btn-look", "btn-stop",
    "slider-lift", "slider-head", "color-picker"].forEach((id) => { $(id).disabled = !on; });
   document.querySelectorAll(".dpad-btn").forEach((b) => { b.disabled = !on; });
   document.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("disabled", !on));
@@ -286,6 +295,9 @@ $("btn-camera").addEventListener("click", () => {
 });
 
 $("btn-photo").addEventListener("click", () => send({ action: "photo" }));
+$("btn-record").addEventListener("click", () => send({ action: "record", enabled: !state.recording }));
+$("btn-faces").addEventListener("click", () => send({ action: "faces", enabled: !state.faces_enabled }));
+$("btn-wake").addEventListener("click", () => send({ action: "wake", enabled: !state.wake_mode }));
 $("btn-dance").addEventListener("click", () => send({ action: "dance" }));
 $("btn-look").addEventListener("click", () => send({ action: "look" }));
 $("btn-stop").addEventListener("click", () => send({ action: "stop" }));

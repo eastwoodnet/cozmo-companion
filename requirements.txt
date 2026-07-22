@@ -5,8 +5,10 @@ pycozmo>=0.8.0
 fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
 
-# Camera frames
+# Camera frames + video + face detection
 Pillow>=10.0.0
+# OpenCV 4.x: la 5.0 eliminó CascadeClassifier y los cascades Haar
+opencv-python-headless>=4.8,<5
 
 # Offline voice recognition (optional — app works without it)
 vosk>=0.3.45
