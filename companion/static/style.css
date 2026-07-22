@@ -93,6 +93,23 @@ body {
 .btn-small { padding: 4px 10px; font-size: 0.8rem; }
 .btn-icon { padding: 8px 10px; }
 .btn.listening { background: var(--err); border-color: var(--err); animation: pulse 1s infinite; }
+.btn.active { background: var(--accent2); border-color: var(--accent2); color: #0a1526; font-weight: 600; }
+
+/* ---------- Memory pill ---------- */
+.mem-pill {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.mem-clear {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 0.75rem; padding: 0 2px;
+}
+.mem-clear:hover { color: var(--err); }
 
 @keyframes pulse { 50% { opacity: 0.6; } }
 

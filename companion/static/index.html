@@ -67,6 +67,7 @@
     <div class="row wrap">
       <button class="btn" id="btn-dance" disabled>🕺 <span data-i18n="dance">Bailar</span></button>
       <button class="btn" id="btn-look" disabled>👀 <span data-i18n="look">Explorar</span></button>
+      <button class="btn" id="btn-pet">🐾 <span data-i18n="pet">Mascota</span></button>
     </div>
     <div class="lights">
       <span data-i18n="lights">Luces</span>:
@@ -79,7 +80,12 @@
   <section class="card chat-card">
     <div class="card-header">
       <h2 data-i18n="chat">Conversación</h2>
-      <select id="personality" class="select" title="Personalidad"></select>
+      <div class="row">
+        <span class="mem-pill" title="Memoria">🧠 <span id="mem-count">0</span>
+          <button class="mem-clear" id="btn-mem-clear" title="Borrar memoria">✕</button>
+        </span>
+        <select id="personality" class="select" title="Personalidad"></select>
+      </div>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-row">

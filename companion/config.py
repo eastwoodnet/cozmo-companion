@@ -51,6 +51,7 @@ class Config:
     vosk_model: Optional[Path] = field(default_factory=find_vosk_model)
 
     photos_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "photos")
+    data_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data")
     camera_fps: float = 5.0
     camera_quality: int = 60
     status_interval: float = 2.0

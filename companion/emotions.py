@@ -118,6 +118,12 @@ class EmotionState:
         self._boredom = 0.0
         self._on_change = on_change
 
+    @property
+    def last_interaction(self) -> float:
+        """Timestamp of the last user interaction (for pet mode idle checks)."""
+        with self._lock:
+            return self._last_interaction
+
     def get(self) -> str:
         with self._lock:
             return self._emotion

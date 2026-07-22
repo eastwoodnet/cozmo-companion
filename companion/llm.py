@@ -174,16 +174,23 @@ class OllamaClient:
 
     # -- generation --
 
-    def build_system_prompt(self, emotion_modifier: Optional[str] = None) -> str:
+    def build_system_prompt(
+        self,
+        emotion_modifier: Optional[str] = None,
+        context: Optional[str] = None,
+    ) -> str:
         parts = [PERSONALITIES[self.personality]["prompt"]]
         if emotion_modifier:
             parts.append(emotion_modifier)
+        if context:
+            parts.append(f"Recent conversation:\n{context}")
         return "\n".join(parts)
 
     def chat(
         self,
         user_text: str,
         emotion_modifier: Optional[str] = None,
+        context: Optional[str] = None,
         timeout: int = 60,
         max_tokens: int = 80,
     ) -> str:
@@ -191,7 +198,7 @@ class OllamaClient:
         payload = {
             "model": self.model,
             "prompt": user_text,
-            "system": self.build_system_prompt(emotion_modifier),
+            "system": self.build_system_prompt(emotion_modifier, context),
             "stream": False,
             "options": {
                 "temperature": 0.9,

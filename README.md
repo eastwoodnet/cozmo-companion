@@ -25,6 +25,8 @@ Suite de pruebas de humo ejecutada contra el servidor real (sin robot físico):
 - **Conversación con IA local** — Ollama con **8 personalidades bilingües**: amigable, Ted (humor negro), pirata, sabio, destructor, anime, depresivo y bebé. Cozmo *habla* las respuestas por su altavoz.
 - **Comandos de voz offline** — Vosk + push-to-talk desde la web. Parser ES/EN: *"cozmo avanza 2"*, *"baila"*, *"luces rojas"*, *"di hola mundo"*. Lo que no es comando se envía al LLM como conversación.
 - **Sistema emocional** — 7 emociones (feliz, triste, curioso, emocionado, cansado, aburrido, asustado) que cambian luces, animaciones y el prompt del LLM. Se aburre si lo ignoras.
+- **Modo mascota autónomo 🐾** — si lo activas y nadie juega con él, Cozmo actúa por su cuenta según su estado de ánimo: explora cuando está curioso, baila cuando está feliz, pide atención cuando se aburre, baja la cabeza cuando tiene sueño... Nunca interrumpe: detecta cuándo estás interactuando.
+- **Memoria persistente 🧠** — SQLite guarda cada conversación, comando y evento en `data/companion.db`. Las últimas interacciones se inyectan en el prompt del LLM: **Cozmo recuerda de qué hablabais**, incluso entre sesiones. Contador en la UI con botón de borrado.
 - **Fotos** — captura desde la cámara de Cozmo: se guardan en `photos/` y se descargan al navegador.
 - **UI bilingüe** — español/inglés con un clic (botón EN/ES).
 
@@ -44,6 +46,8 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 | `companion/server.py` | FastAPI + WebSocket hub; loops de cámara (5 fps) y estado (2 s) |
 | `companion/emotions.py` | Estado emocional con callback `on_change`; modificadores de prompt ES/EN |
 | `companion/llm.py` | Cliente Ollama con urllib (cero dependencias extra) + personalidades |
+| `companion/memory.py` | SQLite: interacciones persistentes + contexto conversacional para el LLM |
+| `companion/pet_mode.py` | Hilo de comportamiento autónomo guiado por la emoción actual |
 | `companion/stt.py` | Hilo Vosk push-to-talk; imports perezosos (la app funciona sin micrófono) |
 | `companion/commands.py` | Parser bilingüe con números escritos (uno..diez / one..ten) y colores |
 | `companion/config.py` | Dataclass + variables de entorno `COZMO_*` + descubrimiento de modelo Vosk |
@@ -133,6 +137,7 @@ cozmo-companion/
 ├── LICENSE                 # GPL v3
 ├── photos/                 # fotos capturadas (git-ignored)
 ├── models/                 # (opcional) modelos Vosk (git-ignored)
+├── data/                   # memoria SQLite (git-ignored)
 └── companion/
     ├── __init__.py         # __version__
     ├── config.py
@@ -140,6 +145,8 @@ cozmo-companion/
     ├── server.py
     ├── emotions.py
     ├── llm.py
+    ├── memory.py
+    ├── pet_mode.py
     ├── stt.py
     ├── commands.py
     └── static/
@@ -167,9 +174,9 @@ cozmo-companion/
 
 ## 🗺️ Roadmap
 
-- [ ] Modo mascota autónomo (idle behaviors según emoción)
+- [x] ~~Modo mascota autónomo (idle behaviors según emoción)~~ — v1.1.0
+- [x] ~~Memoria persistente de conversaciones (SQLite)~~ — v1.1.0
 - [ ] Grabación de video
-- [ ] Memoria persistente de conversaciones (SQLite)
 - [ ] Detección de objetos con la cámara
 - [ ] Wake-word ("¡Cozmo!") sin pulsar botón
 

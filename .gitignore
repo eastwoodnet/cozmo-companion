@@ -12,6 +12,7 @@ env/
 # Datos en runtime
 photos/
 models/
+data/
 
 # SO / editores
 Thumbs.db

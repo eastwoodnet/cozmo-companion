@@ -13,7 +13,7 @@ const I18N = {
     lift: "Brazo", head: "Cabeza", dance: "Bailar", look: "Explorar", lights: "Luces",
     chat: "Conversación", chat_ph: "Escríbele algo a Cozmo...",
     cmd_ph: "Comando: «cozmo avanza 2», «baila»...",
-    emotions: "Emociones", listening: "Escuchando...",
+    emotions: "Emociones", listening: "Escuchando...", pet: "Mascota",
   },
   en: {
     offline: "Offline", connected: "Connected", connecting: "Connecting...",
@@ -23,7 +23,7 @@ const I18N = {
     lift: "Lift", head: "Head", dance: "Dance", look: "Look around", lights: "Lights",
     chat: "Conversation", chat_ph: "Say something to Cozmo...",
     cmd_ph: "Command: \"cozmo forward 2\", \"dance\"...",
-    emotions: "Emotions", listening: "Listening...",
+    emotions: "Emotions", listening: "Listening...", pet: "Pet",
   },
 };
 let lang = "es";
@@ -125,6 +125,10 @@ function onStatus(s) {
   // STT button
   $("btn-mic").style.display = s.stt_available ? "" : "none";
   $("btn-mic").classList.toggle("listening", !!s.stt_listening);
+
+  // Pet mode + memory
+  $("btn-pet").classList.toggle("active", !!s.pet_mode);
+  if (s.memory_count !== undefined) $("mem-count").textContent = s.memory_count;
 
   // Camera button
   cameraOn = !!s.camera;
@@ -354,6 +358,16 @@ let listening = false;
 $("btn-mic").addEventListener("click", () => {
   listening = !listening;
   send({ action: "stt", enabled: listening });
+});
+
+/* Pet mode */
+$("btn-pet").addEventListener("click", () =>
+  send({ action: "pet", enabled: !state.pet_mode }));
+
+/* Memory clear */
+$("btn-mem-clear").addEventListener("click", () => {
+  if (confirm(lang === "es" ? "¿Borrar toda la memoria de Cozmo?" : "Clear all of Cozmo's memory?"))
+    send({ action: "memory_clear" });
 });
 
 /* Log clear */

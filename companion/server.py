@@ -26,6 +26,8 @@ from .commands import COLORS, Command, parse
 from .config import Config
 from .emotions import EmotionState, emotion_list
 from .llm import OllamaClient
+from .memory import KIND_COMMAND, KIND_COZMO, KIND_EVENT, KIND_USER, Memory
+from .pet_mode import PetMode
 from .robot import Robot
 from .stt import VoskListener, stt_available
 
@@ -54,6 +56,9 @@ LOG_STRINGS = {
         "cmd_not_recognized": "No reconocí ese comando",
         "stt_unavailable": "Voz no disponible (falta modelo Vosk o micrófono)",
         "llm_down": "Ollama no responde. Inícialo con: ollama serve",
+        "pet_on": "Modo mascota activado 🐾",
+        "pet_off": "Modo mascota desactivado",
+        "memory_cleared": "Memoria borrada 🧠✕",
     },
     "en": {
         "connecting": "Connecting to Cozmo over WiFi...",
@@ -64,6 +69,9 @@ LOG_STRINGS = {
         "cmd_not_recognized": "Command not recognized",
         "stt_unavailable": "Voice unavailable (missing Vosk model or mic)",
         "llm_down": "Ollama is not responding. Start it with: ollama serve",
+        "pet_on": "Pet mode enabled 🐾",
+        "pet_off": "Pet mode disabled",
+        "memory_cleared": "Memory cleared 🧠✕",
     },
 }
 
@@ -80,6 +88,15 @@ class Hub:
         self.robot = Robot()
         self.emotions = EmotionState(on_change=self._on_emotion_change)
         self.llm = OllamaClient(config.ollama_url, config.ollama_model)
+        self.memory = Memory(config.data_dir / "companion.db")
+        self.pet = PetMode(
+            self.robot,
+            self.emotions,
+            lang=self.lang,
+            on_action=lambda desc: self.broadcast_ts(
+                {"type": "log", "level": "info", "message": f"🐾 {desc}"}
+            ),
+        )
 
         self._stt_available = stt_available(config.vosk_model)
         self.stt: Optional[VoskListener] = None
@@ -160,6 +177,8 @@ class Hub:
             "stt_listening": self.stt.listening if self.stt else False,
             "llm_ok": self._llm_ok,
             "llm_model": self.llm.model,
+            "pet_mode": self.pet.running,
+            "memory_count": self.memory.count(),
             "personality": self.llm.personality,
             "personality_display": self.llm.personality_display(self.lang),
             "personalities": self.llm.list_personalities(self.lang),
@@ -194,13 +213,20 @@ class Hub:
             return
         self.emotions.interact()
         self.emotions.detect_from_text(text)
+        self.memory.add(KIND_USER, text, lang=self.lang, emotion=self.emotions.get())
         if not self.llm_ok():
             await self.log_to_ui(self.t("llm_down"), "warn")
             return
+        context = self.memory.conversation_context(turns=6)
         loop = asyncio.get_running_loop()
         try:
             reply = await loop.run_in_executor(
-                None, lambda: self.llm.chat(text, emotion_modifier=self.emotions.modifier(self.lang))
+                None,
+                lambda: self.llm.chat(
+                    text,
+                    emotion_modifier=self.emotions.modifier(self.lang),
+                    context=context,
+                ),
             )
         except RuntimeError as e:
             await self.log_to_ui(str(e), "error")
@@ -208,6 +234,7 @@ class Hub:
         reply = (reply or "").strip()
         if not reply:
             return
+        self.memory.add(KIND_COZMO, reply, lang=self.lang, emotion=self.emotions.get())
         await self.broadcast({"type": "chat", "role": "cozmo", "text": reply})
         if speak and self.robot.connected:
             self.robot.submit(self._safe(self.robot.say, reply))
@@ -247,6 +274,7 @@ class Hub:
 
     async def execute_command(self, cmd: Command) -> None:
         self.emotions.interact()
+        self.memory.add(KIND_COMMAND, cmd.raw or cmd.action, lang=self.lang, emotion=self.emotions.get())
         r = self.robot
 
         if cmd.action == "mood":
@@ -390,6 +418,13 @@ class Hub:
                 await self.log_to_ui(f"{self.t('cmd_not_recognized')}: «{text}»", "warn")
         elif action == "stt":
             self._toggle_stt(bool(msg.get("enabled", True)))
+        elif action == "pet":
+            self._toggle_pet(bool(msg.get("enabled", True)))
+        elif action == "memory_clear":
+            self.memory.clear()
+            self.memory.add(KIND_EVENT, "memory cleared", lang=self.lang)
+            await self.log_to_ui(self.t("memory_cleared"), "ok")
+            await self.broadcast(self.status())
         elif action == "personality":
             name = str(msg.get("name", ""))
             if self.llm.set_personality(name):
@@ -399,6 +434,7 @@ class Hub:
             lang = str(msg.get("lang", ""))
             if lang in LOG_STRINGS:
                 self.lang = lang
+                self.pet.lang = lang
                 await self.broadcast(self.status())
         else:
             await ws.send_text(json.dumps({"type": "error", "message": f"unknown action: {action}"}))
@@ -421,6 +457,15 @@ class Hub:
             self.stt.start_listening()
         else:
             self.stt.stop_listening()
+
+    def _toggle_pet(self, enabled: bool) -> None:
+        if enabled:
+            self.pet.start()
+            self.broadcast_ts({"type": "log", "level": "ok", "message": self.t("pet_on")})
+        else:
+            self.pet.stop()
+            self.broadcast_ts({"type": "log", "level": "info", "message": self.t("pet_off")})
+        self.broadcast_ts(self.status())
 
     async def _on_connect_done(self, ok: bool, message: str) -> None:
         if ok:
@@ -489,7 +534,9 @@ def create_app(config: Config) -> FastAPI:
             task.cancel()
         if hub.stt:
             hub.stt.stop_listening()
+        hub.pet.stop()
         hub.robot.shutdown()
+        hub.memory.close()
 
     @app.get("/")
     async def index():
