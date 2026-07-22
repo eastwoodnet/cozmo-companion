@@ -1,0 +1,13 @@
+# Core: direct WiFi connection to Cozmo (no mobile app needed)
+pycozmo>=0.8.0
+
+# Web server + WebSocket
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+
+# Camera frames
+Pillow>=10.0.0
+
+# Offline voice recognition (optional — app works without it)
+vosk>=0.3.45
+PyAudio>=0.2.14
