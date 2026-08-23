@@ -121,6 +121,12 @@ class Robot:
 
     def connect(self, on_done: Optional[Callable[[bool, str], None]] = None) -> None:
         """Connect to Cozmo in the background; calls on_done(ok, message)."""
+        # 已连接时幂等：不 teardown，直接回调
+        with self._lock:
+            if self._connected:
+                if on_done:
+                    on_done(True, "ya conectado")
+                return
         self._exec.submit(self._connect_blocking, on_done)
 
     def _connect_blocking(self, on_done: Optional[Callable[[bool, str], None]]) -> None:
