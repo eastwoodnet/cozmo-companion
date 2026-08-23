@@ -83,6 +83,10 @@ WIFI_PASSWORD = os.environ.get("COZMO_WIFI_PASSWORD", "")
 _WIFI_REJOIN_COOLDOWN_SECS = 60.0
 _last_wifi_attempt = 0.0
 
+# Cozmo 触发悬崖后固件锁死驱动方向，软件无法让它后退。
+# 防护：cliff bit 设位时停止发送 drive 命令，让 Cozmo 停在边缘。
+CLIFF_STATUS_BIT = 0x4000
+
 
 class Robot:
     """High-level, thread-safe interface to a physical Cozmo via pycozmo."""
@@ -96,6 +100,7 @@ class Robot:
         self._last_state_ts = 0.0
         self._auto_reconnect = False
         self._connecting = False
+        self._cliff_locked = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -198,6 +203,7 @@ class Robot:
             self._connected = False
             self._camera_enabled = False
             self._last_state_ts = 0.0
+            self._cliff_locked = False
         if client is not None:
             for method in (client.disconnect, client.stop):
                 try:
@@ -234,6 +240,20 @@ class Robot:
 
     def _on_robot_state_tick(self, cli, pkt) -> None:
         self._last_state_ts = time.monotonic()
+        status = getattr(pkt, "status", 0) or 0
+        cliff = bool(status & CLIFF_STATUS_BIT)
+        if cliff and not self._cliff_locked:
+            self._cliff_locked = True
+            log.warning("Acantilado detectado (status=%d); bloqueando drive", status)
+            try:
+                client = self._client
+                if client is not None:
+                    client.stop_all_motors()
+            except Exception:  # noqa: BLE001
+                pass
+        elif not cliff and self._cliff_locked:
+            self._cliff_locked = False
+            log.info("Acantilado despejado; drive desbloqueado")
 
     def _ensure_wifi(self) -> None:
         """Reincorporar al hotspot del robot si wlan0 lo perdió.
@@ -289,7 +309,13 @@ class Robot:
     # ------------------------------------------------------------------
 
     def drive(self, left: float, right: float, duration: float = 0.3) -> None:
-        """Drive wheels at given speeds for a clamped duration."""
+        """Drive wheels at given speeds for a clamped duration.
+
+        Cliff bit 设位时拒绝驱动，防止 Cozmo 在悬崖边继续前进。
+        """
+        if self._cliff_locked:
+            log.warning("Drive bloqueado: acantilado")
+            return
         client = self._get_client()
         duration = self._clamp(float(duration), 0.05, MAX_DRIVE_DURATION)
         client.drive_wheels(lwheel_speed=float(left), rwheel_speed=float(right), duration=duration)
