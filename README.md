@@ -157,10 +157,31 @@ python run.py --ollama-model qwen2.5
 
 Las 8 personalidades siguen funcionando: el prompt de personalidad es ES/EN, pero el modelo responde en el idioma que hables (entrada china → respuesta en chino).
 
+### 3. Comandos de voz en chino
+
+El parser reconoce comandos en chino (los números también como carácter: *"前进二"*, *"左转三"*):
+
+| Chino | Acción |
+|---|---|
+| `前进 2` / `前进二` | Avanzar N segundos |
+| `后退` | Retroceder |
+| `左转 45` / `右转` | Girar N grados |
+| `跳舞` | Bailar |
+| `看看周围` | Mirar alrededor |
+| `拍照` | Tomar foto |
+| `说 你好` | Hablar (TTS) |
+| `红灯` / `关灯` | Cambiar luces |
+| `睡觉` | A dormir |
+| `开心` / `难过` | Cambiar emoción |
+| `你怎么样` | Reportar su estado de ánimo |
+| `举起手臂` / `放下手臂` | Brazo arriba/abajo |
+| `抬头` / `低头` | Cabeza arriba/abajo |
+
 ### ⚠️ Limitaciones
 
 - **El TTS de Cozmo no habla chino**: el altavoz del robot está optimizado para inglés/español. Las respuestas chinas se muestran en el panel web, pero la voz del robot suena en inglés (o con pronunciación imprecisa).
 - La detección automática de emociones solo reconoce palabras clave ES/EN; el texto en chino no cambia la emoción automáticamente (puedes cambiarla a mano desde la UI).
+- `"说X"` también es una frase común en chino conversacional (p. ej. *"说个笑话"* = "cuenta un chiste") y puede interpretarse como comando "decir X" en vez de enviarse al LLM. Si te ocurre, usa la interfaz web o reformula.
 
 ## 🎮 Comandos de voz / texto
 

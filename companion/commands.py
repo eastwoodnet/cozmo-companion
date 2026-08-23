@@ -1,13 +1,19 @@
-"""Bilingual (ES/EN) natural language command parser.
+"""Trilingual (ES/EN/中文) natural language command parser.
 
 Maps spoken or typed phrases to robot actions. Returns a Command or None
 when the text is not a command (in which case it can be sent to the LLM).
+
+Chinese has no word separators, so Chinese keywords, colors and numbers are
+matched by substring instead of by token.
 
 Examples:
     "cozmo avanza 2"      -> Command("forward", seconds=2)
     "cozmo, dance"        -> Command("dance")
     "di hola mundo"       -> Command("say", text="hola mundo")
     "luces rojas"         -> Command("lights", color="red")
+    "前进二"              -> Command("forward", number=2)
+    "红灯"                -> Command("lights", color="red")
+    "说 你好"             -> Command("say", text="你好")
 """
 from __future__ import annotations
 
@@ -49,26 +55,53 @@ WORD_NUMBERS: Dict[str, int] = {
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
 }
 
-# Command keywords: action -> trigger words (all lowercase, ES + EN).
-KEYWORDS: Dict[str, Tuple[str, ...]] = {
-    "forward": ("adelante", "avanza", "avanzar", "recto", "forward", "ahead", "straight"),
-    "backward": ("atrás", "atras", "retrocede", "retroceder", "backward", "back", "reverse"),
-    "left": ("izquierda", "left"),
-    "right": ("derecha", "right"),
-    "dance": ("baila", "bailar", "danza", "dance", "jump", "salta"),
-    "look": ("mira", "explora", "busca", "look", "explore", "search"),
-    "photo": ("foto", "photo", "picture", "captura"),
-    "sleep": ("duerme", "dormir", "descansa", "sleep", "night", "buenas"),
-    "happy": ("feliz", "alegre", "happy", "cheer"),
-    "sad": ("triste", "sad"),
-    "mood": ("cómo estás", "como estas", "qué tal", "que tal", "how are you", "mood", "feeling"),
-    "lift_up": ("sube brazo", "brazo arriba", "levanta", "lift up", "raise lift"),
-    "lift_down": ("baja brazo", "brazo abajo", "lift down", "lower lift"),
-    "head_up": ("cabeza arriba", "levanta cabeza", "head up", "look up"),
-    "head_down": ("cabeza abajo", "baja cabeza", "head down", "look down"),
+# 中文数字：单字、无空格，需按子串匹配（"前进二" -> 2）。
+CN_NUMBERS: Dict[str, int] = {
+    "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
 }
 
-ACTIVATION_WORDS = ("cozmo", "cosmo", "robot", "ok")
+# 中文颜色：单字 -> 规范色名（供灯光子串匹配）。
+CN_COLORS: Dict[str, str] = {
+    "红": "red", "绿": "green", "蓝": "blue", "白": "white",
+    "黄": "yellow", "紫": "purple", "橙": "orange",
+}
+
+# 中文灯光关键词（出现即视为灯光命令）。
+CN_LIGHT_WORDS = ("灯", "灯光")
+
+# Command keywords: action -> trigger words (all lowercase, ES + EN + 中文).
+# 中文触发词按子串匹配（无空格），均取 >=2 字以减少误触。
+KEYWORDS: Dict[str, Tuple[str, ...]] = {
+    "forward": ("adelante", "avanza", "avanzar", "recto", "forward", "ahead", "straight",
+                "前进", "向前", "往前走", "往前", "直行"),
+    "backward": ("atrás", "atras", "retrocede", "retroceder", "backward", "back", "reverse",
+                 "后退", "向后", "倒退", "退后", "往回走"),
+    "left": ("izquierda", "left", "左转", "向左转", "向左"),
+    "right": ("derecha", "right", "右转", "向右转", "向右"),
+    "dance": ("baila", "bailar", "danza", "dance", "jump", "salta",
+              "跳舞", "跳个舞", "来点舞", "来段舞"),
+    "look": ("mira", "explora", "busca", "look", "explore", "search",
+             "看看周围", "四处看看", "环顾", "看看"),
+    "photo": ("foto", "photo", "picture", "captura",
+              "拍照", "拍张照", "拍个照", "照片"),
+    "sleep": ("duerme", "dormir", "descansa", "sleep", "night", "buenas",
+              "睡觉", "去睡", "睡吧", "休息"),
+    "happy": ("feliz", "alegre", "happy", "cheer", "开心", "高兴", "快乐"),
+    "sad": ("triste", "sad", "难过", "伤心"),
+    "mood": ("cómo estás", "como estas", "qué tal", "que tal", "how are you", "mood", "feeling",
+             "你怎么样", "你好吗", "感觉怎么样", "心情怎么样", "最近怎么样"),
+    "lift_up": ("sube brazo", "brazo arriba", "levanta", "lift up", "raise lift",
+                "举起手臂", "抬起手臂", "手臂起来", "举手臂"),
+    "lift_down": ("baja brazo", "brazo abajo", "lift down", "lower lift",
+                  "放下手臂", "手臂下去", "放低手臂", "放下手臂"),
+    "head_up": ("cabeza arriba", "levanta cabeza", "head up", "look up",
+                "抬头", "抬起头", "头抬起"),
+    "head_down": ("cabeza abajo", "baja cabeza", "head down", "look down",
+                  "低头", "低下头", "头低下"),
+}
+
+ACTIVATION_WORDS = ("cozmo", "cosmo", "robot", "ok", "机器人")
 
 
 @dataclass
@@ -108,7 +141,8 @@ class Command:
 
 def _normalize(text: str) -> str:
     text = text.lower().strip()
-    text = re.sub(r"[¿?¡!.,;:]", " ", text)
+    # 同时清理西/英标点与中文标点（？！。，、；：及引号括号）。
+    text = re.sub(r"[¿?¡!.,;:？！。，、；：“”'‘’（）()【】\[\]]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -128,6 +162,10 @@ def _extract_number(text: str) -> Optional[float]:
     for word in text.split():
         if word in WORD_NUMBERS:
             return float(WORD_NUMBERS[word])
+    # 中文数字是单字且无空格分隔，按子串匹配（"前进二" -> 2）。
+    for word, value in CN_NUMBERS.items():
+        if word in text:
+            return float(value)
     return None
 
 
@@ -144,7 +182,8 @@ def parse(text: str) -> Optional[Command]:
     tokens = set(text.split())
 
     # "say X" / "di X" — keep the remainder verbatim.
-    for trigger in ("di ", "dec ", "say ", "repite "):
+    # 中文触发词 "说"/"念" 为单字、无尾随空格（中文不分词）。
+    for trigger in ("di ", "dec ", "say ", "repite ", "说", "念"):
         if text.startswith(trigger):
             payload = text[len(trigger):].strip()
             if payload:
@@ -155,6 +194,14 @@ def parse(text: str) -> Optional[Command]:
         for word in tokens:
             if word in COLOR_WORDS:
                 return Command("lights", color=COLOR_WORDS[word], raw=raw)
+
+    # Lights (中文): 无空格分词，按子串匹配；"关" 表示关灯。
+    if any(w in text for w in CN_LIGHT_WORDS):
+        if "关" in text:
+            return Command("lights", color="off", raw=raw)
+        for char, canonical in CN_COLORS.items():
+            if char in text:
+                return Command("lights", color=canonical, raw=raw)
 
     # Keyword commands (longest trigger match wins so "cabeza arriba" beats "arriba").
     best: Optional[Tuple[str, str]] = None  # (action, trigger)
