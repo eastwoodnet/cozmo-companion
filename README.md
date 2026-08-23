@@ -22,7 +22,7 @@ Suite de pruebas de humo ejecutada contra el servidor real (sin robot físico):
 
 - **Panel web en tiempo real** — WebSocket puro, sin recargas ni polling: cámara en vivo (5 fps), estado, batería, log.
 - **Control total del robot** — D-pad con hold-to-move + teclado (WASD/flechas), brazo y cabeza con sliders, luces RGB con paleta y selector de color, animaciones, voz TTS, fotos.
-- **Conversación con IA local** — Ollama con **8 personalidades bilingües**: amigable, Ted (humor negro), pirata, sabio, destructor, anime, depresivo y bebé. Cozmo *habla* las respuestas por su altavoz.
+- **Conversación con IA** — Ollama local o LLM en la nube (OpenAI-compatible), con **8 personalidades bilingües**: amigable, Ted (humor negro), pirata, sabio, destructor, anime, depresivo y bebé. Cozmo *habla* las respuestas por su altavoz.
 - **Comandos de voz offline** — Vosk + push-to-talk desde la web. Parser ES/EN/中文: *"cozmo avanza 2"*, *"baila"*, *"luces rojas"*, *"di hola mundo"*, *"前进二"*, *"跳舞"*. Lo que no es comando se envía al LLM como conversación.
 - **Sistema emocional** — 7 emociones (feliz, triste, curioso, emocionado, cansado, aburrido, asustado) que cambian luces, animaciones y el prompt del LLM. Se aburre si lo ignoras.
 - **Modo mascota autónomo 🐾** — si lo activas y nadie juega con él, Cozmo actúa por su cuenta según su estado de ánimo: explora cuando está curioso, baila cuando está feliz, pide atención cuando se aburre, baja la cabeza cuando tiene sueño... Nunca interrumpe: detecta cuándo estás interactuando.
@@ -40,7 +40,7 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
                               │
                               ├─→ ThreadPoolExecutor(1) → pycozmo → Cozmo (WiFi UDP)
                               ├─→ VoskListener (thread) → micrófono
-                              └─→ OllamaClient → localhost:11434
+                              └─→ LLMClient → Ollama (localhost:11434) / OpenAI-compatible (nube)
 ```
 
 | Módulo | Responsabilidad |
@@ -48,7 +48,7 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 | `companion/robot.py` | Wrapper thread-safe de pycozmo: acciones serializadas en un executor, nunca se solapan en el cable |
 | `companion/server.py` | FastAPI + WebSocket hub; loops de cámara (5 fps) y estado (2 s) |
 | `companion/emotions.py` | Estado emocional con callback `on_change`; modificadores de prompt ES/EN |
-| `companion/llm.py` | Cliente Ollama con urllib (cero dependencias extra) + personalidades |
+| `companion/llm.py` | Cliente LLM con urllib (cero dependencias extra): Ollama local u OpenAI-compatible (nube) + personalidades |
 | `companion/memory.py` | SQLite: interacciones persistentes + contexto conversacional para el LLM |
 | `companion/pet_mode.py` | Hilo de comportamiento autónomo guiado por la emoción actual |
 | `companion/perception.py` | Detección de caras con Haar cascades + cálculo de giro para centrarse |
@@ -62,14 +62,14 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 
 1. **Python 3.10+** (pycozmo funciona en Python moderno, a diferencia del SDK oficial).
 2. **Windows: [Npcap](https://npcap.com)** — necesario para la captura de paquetes de pycozmo. Linux: ejecutar con `sudo` o capabilities de red (`setcap`).
-3. **Opcional — IA:** [Ollama](https://ollama.com) + `ollama pull phi3`.
+3. **Opcional — IA:** [Ollama](https://ollama.com) + `ollama pull phi3` (o un LLM OpenAI-compatible en la nube, ver [LLM en la nube](#-llm-en-la-nube-openai-compatible)).
 4. **Opcional — voz:** micrófono + modelo Vosk (ver abajo).
 5. **Opcional — visión:** `opencv-python-headless<5` (ya en requirements) para detección de caras y video MP4. Sin OpenCV la app funciona igual, grabando GIFs.
 
 ## 🚀 Instalación y ejecución
 
 ```bash
-git clone https://github.com/vicorio27/cozmo-companion.git
+git clone https://github.com/eastwoodnet/cozmo-companion.git
 cd cozmo-companion
 pip install -r requirements.txt
 python run.py
@@ -219,7 +219,7 @@ El parser reconoce comandos en chino (los números también como carácter: *"�
 | `sube brazo` | `lift up` | Brazo arriba/abajo |
 | `cabeza arriba` | `head up` | Cabeza arriba/abajo |
 
-Números también como palabra: *"avanza dos"*, *"gira tres"*. Si el texto **no es un comando**, se envía al LLM como conversación (si Ollama está activo).
+Números también como palabra: *"avanza dos"*, *"gira tres"*. Si el texto **no es un comando**, se envía al LLM como conversación (si el LLM está activo).
 
 ## 🧩 Estructura del proyecto
 
@@ -257,6 +257,7 @@ cozmo-companion/
 |---|---|
 | *"No se pudo conectar"* | Verifica que el PC está en la WiFi de Cozmo y que Npcap está instalado (Windows) |
 | *"Ollama no responde"* | `ollama serve` en otra terminal + `ollama pull phi3` |
+| *"No se pudo conectar con el LLM"* (nube) | Revisa `COZMO_OLLAMA_URL` (debe incluir `/v1`) y `COZMO_LLM_API_KEY` |
 | El botón 🎤 no aparece | Falta modelo Vosk o PyAudio — revisa el banner de arranque |
 | Emojis rotos en consola Windows | Ya gestionado: `run.py` reconfigura stdout a UTF-8 |
 | Giro impreciso | Calibración `TURN_DEG_PER_SEC = 130` en `robot.py` — ajústala a tu unidad |
