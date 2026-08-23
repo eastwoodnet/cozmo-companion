@@ -95,6 +95,7 @@ class Robot:
         self._camera_enabled = False
         self._last_state_ts = 0.0
         self._auto_reconnect = False
+        self._connecting = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -121,12 +122,16 @@ class Robot:
 
     def connect(self, on_done: Optional[Callable[[bool, str], None]] = None) -> None:
         """Connect to Cozmo in the background; calls on_done(ok, message)."""
-        # 已连接时幂等：不 teardown，直接回调
         with self._lock:
             if self._connected:
                 if on_done:
                     on_done(True, "ya conectado")
                 return
+            if self._connecting:
+                if on_done:
+                    on_done(False, "conectando")
+                return
+            self._connecting = True
         self._exec.submit(self._connect_blocking, on_done)
 
     def _connect_blocking(self, on_done: Optional[Callable[[bool, str], None]]) -> None:
@@ -169,6 +174,9 @@ class Robot:
         except Exception as e:  # noqa: BLE001 - report any failure to the UI
             msg = str(e) or e.__class__.__name__
             log.warning("Connection failed: %s", msg)
+        finally:
+            with self._lock:
+                self._connecting = False
         if on_done:
             try:
                 on_done(ok, msg)
