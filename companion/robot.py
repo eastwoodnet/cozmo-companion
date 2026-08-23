@@ -60,7 +60,6 @@ except ImportError as e:
 # Calibrated in Cozmo Voice Commands: at wheel speed 100 Cozmo turns ~130 deg/s.
 TURN_DEG_PER_SEC = 130.0
 MAX_DRIVE_DURATION = 3.0
-SPEAK_SECS_PER_CHAR = 0.08
 
 
 class Robot:
@@ -198,13 +197,15 @@ class Robot:
     # ------------------------------------------------------------------
 
     def say(self, text: str) -> None:
-        """Speak text with Cozmo's TTS voice (blocks for speech duration)."""
+        """Speak text with Cozmo's TTS voice.
+
+        pycozmo 0.8.0 no expone TTS (no existe say_text ni paquete SayText);
+        se registra una advertencia y se descarta el texto.
+        """
         text = (text or "").strip()
         if not text:
             return
-        client = self._get_client()
-        client.say_text(text)
-        time.sleep(max(1.0, len(text) * SPEAK_SECS_PER_CHAR))
+        log.warning("TTS no disponible en pycozmo 0.8.0; sin decir: %s", text[:50])
 
     def play_anim(self, name: str) -> None:
         """Play a named animation; tolerates unknown names."""
@@ -218,7 +219,7 @@ class Robot:
 
     def set_lights(self, rgb: Tuple[int, int, int]) -> None:
         client = self._get_client()
-        light = pycozmo.lights.Light(pycozmo.lights.Color(int(rgb[0]), int(rgb[1]), int(rgb[2])))
+        light = pycozmo.lights.Color(int(rgb[0]), int(rgb[1]), int(rgb[2]))
         client.set_all_backpack_lights(light)
 
     def lights_off(self) -> None:
@@ -256,10 +257,7 @@ class Robot:
 
     def set_camera(self, enabled: bool) -> None:
         client = self._get_client()
-        if enabled:
-            client.camera.start()
-        else:
-            client.camera.stop()
+        client.enable_camera(bool(enabled))
         with self._lock:
             self._camera_enabled = bool(enabled)
 
@@ -268,13 +266,13 @@ class Robot:
         try:
             with self._lock:
                 client = self._client
-            if client is None or not getattr(client, "camera", None):
+            if client is None:
                 return None
-            img = client.camera.latest_image
-            if img is None or not hasattr(img, "raw_image"):
+            img = getattr(client, "_latest_image", None)
+            if img is None:
                 return None
             buf = io.BytesIO()
-            img.raw_image.save(buf, format="JPEG", quality=quality)
+            img.save(buf, format="JPEG", quality=quality)
             return buf.getvalue()
         except Exception:  # noqa: BLE001
             return None
