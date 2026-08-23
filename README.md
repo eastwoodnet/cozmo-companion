@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 ![Status](https://img.shields.io/badge/status-verificado%20%E2%9C%93-brightgreen)
 
-**Reemplazo moderno de la app oficial de Cozmo (descontinuada por Anki).** Controla tu Cozmo **sin la app móvil**: conexión directa por WiFi con [pycozmo](https://github.com/zayfod/pycozmo), panel web en tiempo real con WebSocket, conversación con IA local y comandos de voz offline — todo bilingüe **ES/EN**.
+**Reemplazo moderno de la app oficial de Cozmo (descontinuada por Anki).** Controla tu Cozmo **sin la app móvil**: conexión directa por WiFi con [pycozmo](https://github.com/zayfod/pycozmo), panel web en tiempo real con WebSocket, conversación con IA local y comandos de voz offline — todo **ES/EN/中文**.
 
 Reescritura moderna de [Cozmo Voice Commands](https://github.com/rizal72/Cozmo-Voice-Commands): el original quedó atado a Python 3.6 por el SDK de Anki; este proyecto usa **pycozmo sobre Python 3.10+**, FastAPI y arquitectura reactiva.
 
@@ -23,7 +23,7 @@ Suite de pruebas de humo ejecutada contra el servidor real (sin robot físico):
 - **Panel web en tiempo real** — WebSocket puro, sin recargas ni polling: cámara en vivo (5 fps), estado, batería, log.
 - **Control total del robot** — D-pad con hold-to-move + teclado (WASD/flechas), brazo y cabeza con sliders, luces RGB con paleta y selector de color, animaciones, voz TTS, fotos.
 - **Conversación con IA local** — Ollama con **8 personalidades bilingües**: amigable, Ted (humor negro), pirata, sabio, destructor, anime, depresivo y bebé. Cozmo *habla* las respuestas por su altavoz.
-- **Comandos de voz offline** — Vosk + push-to-talk desde la web. Parser ES/EN: *"cozmo avanza 2"*, *"baila"*, *"luces rojas"*, *"di hola mundo"*. Lo que no es comando se envía al LLM como conversación.
+- **Comandos de voz offline** — Vosk + push-to-talk desde la web. Parser ES/EN/中文: *"cozmo avanza 2"*, *"baila"*, *"luces rojas"*, *"di hola mundo"*, *"前进二"*, *"跳舞"*. Lo que no es comando se envía al LLM como conversación.
 - **Sistema emocional** — 7 emociones (feliz, triste, curioso, emocionado, cansado, aburrido, asustado) que cambian luces, animaciones y el prompt del LLM. Se aburre si lo ignoras.
 - **Modo mascota autónomo 🐾** — si lo activas y nadie juega con él, Cozmo actúa por su cuenta según su estado de ánimo: explora cuando está curioso, baila cuando está feliz, pide atención cuando se aburre, baja la cabeza cuando tiene sueño... Nunca interrumpe: detecta cuándo estás interactuando.
 - **Memoria persistente 🧠** — SQLite guarda cada conversación, comando y evento en `data/companion.db`. Las últimas interacciones se inyectan en el prompt del LLM: **Cozmo recuerda de qué hablabais**, incluso entre sesiones. Contador en la UI con botón de borrado.
@@ -54,7 +54,7 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 | `companion/perception.py` | Detección de caras con Haar cascades + cálculo de giro para centrarse |
 | `companion/recorder.py` | Grabación de video: MP4 con OpenCV, GIF animado con Pillow |
 | `companion/stt.py` | Hilo Vosk: push-to-talk y modo continuo para wake-word |
-| `companion/commands.py` | Parser bilingüe con números escritos (uno..diez / one..ten) y colores |
+| `companion/commands.py` | Parser ES/EN/中文 con números escritos (uno..diez / one..ten / 一..十) y colores |
 | `companion/config.py` | Dataclass + variables de entorno `COZMO_*` + descubrimiento de modelo Vosk |
 | `companion/static/` | UI vanilla JS/CSS/HTML — sin build, sin frameworks |
 
@@ -113,6 +113,54 @@ unzip vosk-model-small-es-0.42.zip
 ```
 
 Inglés: [vosk-model-small-en-us-0.15](https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip) (~40 MB).
+
+Chino: [vosk-model-small-cn-0.22](https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip) (~42 MB) — ver [中文支持](#-中文支持-chinese).
+
+## 🇨🇳 中文支持 (Chinese)
+
+Cozmo Companion soporta diálogo y comandos de voz en chino. No requiere cambios de código: solo configurar dos modelos.
+
+### 1. Reconocimiento de voz chino (Vosk)
+
+Descarga el modelo chino (~42 MB):
+
+```bash
+mkdir models && cd models
+curl -LO https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip
+unzip vosk-model-small-cn-0.22.zip
+```
+
+Arranca con:
+
+```bash
+python run.py --vosk-model ./models/vosk-model-small-cn-0.22
+# o: COZMO_VOSK_MODEL=./models/vosk-model-small-cn-0.22 python run.py
+```
+
+También hay un modelo grande para mayor precisión (servidor): [vosk-model-cn-0.22](https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip) (~1.3 GB).
+
+### 2. Diálogo chino (Ollama)
+
+El modelo por defecto `phi3` tiene un chino débil. Para conversar en chino, descarga un modelo con buen chino:
+
+```bash
+ollama pull qwen2.5          # 7B, recomendado
+# ollama pull qwen2.5:3b     # ligero
+# ollama pull qwen2.5:1.5b   # muy ligero
+```
+
+Arranca con:
+
+```bash
+python run.py --ollama-model qwen2.5
+```
+
+Las 8 personalidades siguen funcionando: el prompt de personalidad es ES/EN, pero el modelo responde en el idioma que hables (entrada china → respuesta en chino).
+
+### ⚠️ Limitaciones
+
+- **El TTS de Cozmo no habla chino**: el altavoz del robot está optimizado para inglés/español. Las respuestas chinas se muestran en el panel web, pero la voz del robot suena en inglés (o con pronunciación imprecisa).
+- La detección automática de emociones solo reconoce palabras clave ES/EN; el texto en chino no cambia la emoción automáticamente (puedes cambiarla a mano desde la UI).
 
 ## 🎮 Comandos de voz / texto
 
