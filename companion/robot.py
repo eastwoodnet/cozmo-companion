@@ -65,7 +65,8 @@ MAX_DRIVE_DURATION = 3.0
 
 # El robot despierto emite ~30 RobotState/s; sin paquetes en este intervalo
 # la sesión está muerta (robot dormido, Disconnect, WiFi caído).
-STALE_STATE_SECS = 5.0
+# 10s 避免动画/移动期间短暂无包导致误触发重连。
+STALE_STATE_SECS = 10.0
 
 # pycozmo.conn.Connection.CONNECTED (3); el robot puede cerrar la sesión
 # enviando Disconnect y el estado pasa a IDLE sin avisar.
