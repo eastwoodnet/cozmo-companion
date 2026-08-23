@@ -71,11 +71,15 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 ```bash
 git clone https://github.com/eastwoodnet/cozmo-companion.git
 cd cozmo-companion
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python run.py
 ```
 
 Se abre automáticamente en `http://127.0.0.1:8000`.
+
+> **Nota (venv):** los sistemas modernos (Debian 12+, Ubuntu 23.04+) marcan el Python del sistema como *externally managed* (PEP 668): `pip install` directo falla con `error: externally-managed-environment`. Usa siempre un entorno virtual como arriba. Si `python3 -m venv` falla por módulo faltante: `sudo apt install python3-venv`. Para sesiones futuras: `source .venv/bin/activate` antes de `python run.py`.
 
 **Para conectar con el robot:**
 1. Enciende Cozmo (levanta su brazo: emite su propia red WiFi).
@@ -256,6 +260,8 @@ cozmo-companion/
 | Problema | Solución |
 |---|---|
 | *"No se pudo conectar"* | Verifica que el PC está en la WiFi de Cozmo y que Npcap está instalado (Windows) |
+| *"pycozmo no está instalado"* | Activa el venv (`source .venv/bin/activate`) y `pip install -r requirements.txt` |
+| `error: externally-managed-environment` | Usa un entorno virtual (venv), ver [Instalación](#-instalación-y-ejecución) |
 | *"Ollama no responde"* | `ollama serve` en otra terminal + `ollama pull phi3` |
 | *"No se pudo conectar con el LLM"* (nube) | Revisa `COZMO_OLLAMA_URL` (debe incluir `/v1`) y `COZMO_LLM_API_KEY` |
 | El botón 🎤 no aparece | Falta modelo Vosk o PyAudio — revisa el banner de arranque |
