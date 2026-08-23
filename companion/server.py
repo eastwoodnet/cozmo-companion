@@ -147,6 +147,7 @@ class Hub:
 
         self._llm_ok = False
         self._llm_checked = 0.0
+        self._reconnecting = False
         self._tasks = []
 
     def _make_listener(self, continuous: bool) -> Optional[VoskListener]:
@@ -441,6 +442,7 @@ class Hub:
             await self.log_to_ui(self.t("connecting"))
             r.connect(on_done=lambda ok, m: self._run_coro(self._on_connect_done(ok, m)))
         elif action == "disconnect":
+            self._reconnecting = False
             r.disconnect()
             await self.log_to_ui(self.t("disconnected"))
         elif action == "drive":
@@ -614,11 +616,31 @@ class Hub:
         self.broadcast_ts(self.status())
 
     async def _on_connect_done(self, ok: bool, message: str) -> None:
+        self._reconnecting = False
         if ok:
             await self.log_to_ui(self.t("connected"), "ok")
             self.emotions.set("happy", reason="connected")
         else:
             await self.log_to_ui(f"{self.t('connect_failed')} ({message})", "error")
+        await self.broadcast(self.status())
+
+    def _start_reconnect(self, reason: str) -> None:
+        """Kick off an automatic reconnect after a silent session death."""
+        if self._reconnecting:
+            return
+        self._reconnecting = True
+        self.broadcast_ts({"type": "log", "level": "warn",
+                           "message": f"Robot sin respuesta ({reason}); reconectando..."})
+        def on_done(ok: bool, msg: str) -> None:
+            self._run_coro(self._on_reconnect_done(ok, msg))
+        self.robot.reconnect(on_done=on_done)
+
+    async def _on_reconnect_done(self, ok: bool, msg: str) -> None:
+        self._reconnecting = False
+        if ok:
+            await self.log_to_ui("Robot reconectado", "ok")
+        else:
+            await self.log_to_ui(f"Reconexión fallida ({msg}); reintentaré", "warn")
         await self.broadcast(self.status())
 
     # ------------------------------------------------------------------
@@ -679,6 +701,9 @@ class Hub:
                     self._llm_ok = await loop.run_in_executor(None, self.llm.is_reachable)
                     self._llm_checked = time.time()
                 self.emotions.tick(dt=self.config.status_interval)
+                problem = self.robot.health()
+                if problem:
+                    self._start_reconnect(problem)
                 await self.broadcast(self.status())
             except Exception:  # noqa: BLE001
                 log.exception("status loop error")
