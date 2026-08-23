@@ -27,6 +27,29 @@ from typing import Callable, Optional, Tuple
 
 log = logging.getLogger("companion.robot")
 
+# pycozmo 内置 ping 依赖接收线程，动画/显示包繁忙时 ping 延迟，
+# Cozmo 5s 没收到 ping 就断开。自己发 ping 保证连接不断。
+_PING_INTERVAL = 0.5
+_ping_stop = threading.Event()
+_ping_thread: Optional[threading.Thread] = None
+
+
+def _ping_loop(client) -> None:
+    """每 0.5s 发一个 Ping 包，保持 Cozmo 连接活跃。"""
+    import time as _time
+    counter = 0
+    while not _ping_stop.is_set():
+        try:
+            conn = client.conn
+            if conn is not None:
+                import pycozmo.protocol_encoder as pe
+                pkt = pe.Ping(_time.perf_counter(), counter, 0)
+                conn.send(pkt)
+                counter += 1
+        except Exception:  # noqa: BLE001
+            pass
+        _ping_stop.wait(_PING_INTERVAL)
+
 
 def _ensure_chunk_module() -> None:
     """Ensure `chunk` is importable before importing pycozmo.
@@ -65,8 +88,8 @@ MAX_DRIVE_DURATION = 3.0
 
 # El robot despierto emite ~30 RobotState/s; sin paquetes en este intervalo
 # la sesión está muerta (robot dormido, Disconnect, WiFi caído).
-# 10s 避免动画/移动期间短暂无包导致误触发重连。
-STALE_STATE_SECS = 10.0
+# 30s: Cozmo 在动画/显示包繁忙时 ping 可能被延迟，5-10s 太敏感导致频繁重连。
+STALE_STATE_SECS = 30.0
 
 # pycozmo.conn.Connection.CONNECTED (3); el robot puede cerrar la sesión
 # enviando Disconnect y el estado pasa a IDLE sin avisar.
@@ -166,6 +189,11 @@ class Robot:
                 self._camera_enabled = False
                 self._last_state_ts = time.monotonic()
                 self._auto_reconnect = True
+            # 启动独立 ping 线程，防止 pycozmo 内置 ping 延迟导致断开
+            global _ping_thread
+            _ping_stop.clear()
+            _ping_thread = threading.Thread(target=_ping_loop, args=(client,), daemon=True)
+            _ping_thread.start()
             ok, msg = True, "connected"
             log.info("Connected to Cozmo")
             # load_anims 在 aarch64 上很慢（find_file 对每个 pair 都 os.walk），
@@ -199,6 +227,11 @@ class Robot:
 
     def _teardown_client(self) -> None:
         """Stop the current client (if any) and clear the connection state."""
+        global _ping_thread
+        _ping_stop.set()
+        if _ping_thread is not None:
+            _ping_thread.join(timeout=2.0)
+            _ping_thread = None
         with self._lock:
             client, self._client = self._client, None
             self._connected = False
@@ -335,11 +368,15 @@ class Robot:
 
     def move_lift(self, value: float) -> None:
         """Move lift, 0.0 (down) to 1.0 (up)."""
-        self._get_client().move_lift(self._clamp(float(value), 0.0, 1.0))
+        v = self._clamp(float(value), 0.0, 1.0)
+        height_mm = v * 70.0
+        self._get_client().set_lift_height(height_mm)
 
     def move_head(self, value: float) -> None:
         """Move head, 0.0 (down) to 1.0 (up)."""
-        self._get_client().move_head(self._clamp(float(value), 0.0, 1.0))
+        v = self._clamp(float(value), 0.0, 1.0)
+        angle_rad = -0.42 + v * 1.2
+        self._get_client().set_head_angle(angle_rad)
 
     # ------------------------------------------------------------------
     # Speech / animations / lights
