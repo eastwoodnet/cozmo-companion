@@ -143,10 +143,6 @@ class Robot:
                 client.wait_for_robot()
             # Vigilancia de salud: cada RobotState refresca el timestamp.
             client.add_handler(pycozmo.protocol_encoder.RobotState, self._on_robot_state_tick)
-            try:
-                client.load_anims()
-            except Exception as e:  # noqa: BLE001 - sin assets no hay animaciones
-                log.warning("Animaciones no disponibles: %s", e)
             with self._lock:
                 self._client = client
                 self._connected = True
@@ -155,6 +151,15 @@ class Robot:
                 self._auto_reconnect = True
             ok, msg = True, "connected"
             log.info("Connected to Cozmo")
+            # load_anims 在 aarch64 上很慢（find_file 对每个 pair 都 os.walk），
+            # 放后台线程避免阻塞 connect 完成。
+            def _bg_load_anims():
+                try:
+                    client.load_anims()
+                    log.info("Animaciones cargadas")
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Animaciones no disponibles: %s", e)
+            threading.Thread(target=_bg_load_anims, daemon=True).start()
         except Exception as e:  # noqa: BLE001 - report any failure to the UI
             msg = str(e) or e.__class__.__name__
             log.warning("Connection failed: %s", msg)
