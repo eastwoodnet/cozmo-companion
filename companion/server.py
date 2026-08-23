@@ -26,7 +26,7 @@ from . import __version__
 from .commands import COLORS, Command, parse
 from .config import Config
 from .emotions import EmotionState, emotion_list
-from .llm import OllamaClient
+from .llm import LLMClient
 from .memory import KIND_COMMAND, KIND_COZMO, KIND_EVENT, KIND_USER, Memory
 from .perception import FaceDetector, faces_available, turn_angle_for_face
 from .pet_mode import PetMode
@@ -114,7 +114,7 @@ class Hub:
 
         self.robot = Robot()
         self.emotions = EmotionState(on_change=self._on_emotion_change)
-        self.llm = OllamaClient(config.ollama_url, config.ollama_model)
+        self.llm = LLMClient(config.ollama_url, config.ollama_model, api_key=config.llm_api_key)
         self.memory = Memory(config.data_dir / "companion.db")
         self.pet = PetMode(
             self.robot,

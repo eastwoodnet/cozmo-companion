@@ -47,6 +47,10 @@ class Config:
         default_factory=lambda: os.environ.get("COZMO_OLLAMA_URL", "http://localhost:11434")
     )
     ollama_model: str = field(default_factory=lambda: os.environ.get("COZMO_OLLAMA_MODEL", "phi3"))
+    # Opcional: si se define, el cliente usa un endpoint OpenAI-compatible
+    # (nube, /chat/completions + Bearer) en vez de Ollama local. Nunca se
+    # registra en logs ni se muestra en la UI.
+    llm_api_key: Optional[str] = field(default_factory=lambda: os.environ.get("COZMO_LLM_API_KEY"))
 
     vosk_model: Optional[Path] = field(default_factory=find_vosk_model)
 

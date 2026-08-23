@@ -1,7 +1,11 @@
-"""Local LLM integration via Ollama's HTTP API.
+"""LLM integration: Ollama (local) or any OpenAI-compatible endpoint.
 
 Includes the bilingual personality system ported from Cozmo Voice Commands.
 No third-party dependencies: uses urllib from the standard library.
+
+El modo se elige por la presencia de una API key:
+- Sin API key  -> Ollama /api/generate (local, comportamiento por defecto).
+- Con API key  -> OpenAI-compatible /chat/completions (nube), auth Bearer.
 """
 from __future__ import annotations
 
@@ -135,22 +139,34 @@ def clean_response(text: str) -> str:
     return text.strip()
 
 
-class OllamaClient:
-    """Minimal Ollama chat client with personality and emotion support."""
+class LLMClient:
+    """Minimal chat client with personality and emotion support.
 
-    def __init__(self, base_url: str, model: str, personality: str = DEFAULT_PERSONALITY) -> None:
+    Habla con Ollama (/api/generate) cuando no hay API key, o con cualquier
+    endpoint OpenAI-compatible (/chat/completions, auth Bearer) cuando sí.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        personality: str = DEFAULT_PERSONALITY,
+        api_key: Optional[str] = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.personality = personality if personality in PERSONALITIES else DEFAULT_PERSONALITY
+        self.api_key = api_key
 
     # -- availability --
 
     def is_reachable(self, timeout: float = 0.5) -> bool:
-        """Quick TCP check to see if the Ollama server is up."""
+        """Quick TCP check to see if the LLM endpoint is up."""
         try:
             parsed = urlparse(self.base_url)
             host = parsed.hostname or "localhost"
-            port = parsed.port or 11434
+            # HTTPS (nube) usa 443 por defecto; HTTP plano (Ollama) usa 11434.
+            port = parsed.port or (443 if parsed.scheme == "https" else 11434)
             with socket.create_connection((host, port), timeout=timeout):
                 return True
         except OSError:
@@ -194,32 +210,71 @@ class OllamaClient:
         timeout: int = 60,
         max_tokens: int = 80,
     ) -> str:
-        """Send text to Ollama and return the cleaned response."""
-        payload = {
-            "model": self.model,
-            "prompt": user_text,
-            "system": self.build_system_prompt(emotion_modifier, context),
-            "stream": False,
-            "options": {
+        """Send text to the LLM and return the cleaned response.
+
+        Modo OpenAI-compatible si hay API key; Ollama si no.
+        """
+        system_prompt = self.build_system_prompt(emotion_modifier, context)
+        if self.api_key:
+            url = self.base_url + "/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            }
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_text},
+                ],
+                "stream": False,
                 "temperature": 0.9,
-                "num_predict": max_tokens,
-                "stop": ["\n\n", "---", "User:", "Assistant:", "Instructions"],
-            },
-        }
+                "max_tokens": max_tokens,
+            }
+        else:
+            url = self.base_url + "/api/generate"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "model": self.model,
+                "prompt": user_text,
+                "system": system_prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.9,
+                    "num_predict": max_tokens,
+                    "stop": ["\n\n", "---", "User:", "Assistant:", "Instructions"],
+                },
+            }
+
         data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            self.base_url + "/api/generate",
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
-                return clean_response(result.get("response", ""))
         except urllib.error.URLError as e:
-            log.warning("Ollama unreachable at %s: %s", self.base_url, e)
-            raise RuntimeError(
-                "No se pudo conectar con Ollama. Instálalo desde https://ollama.com "
-                f"y ejecuta: ollama pull {self.model}"
-            ) from e
+            log.warning("LLM unreachable at %s: %s", self.base_url, e)
+            raise RuntimeError(self._error_hint()) from e
+
+        if self.api_key:
+            try:
+                content = result["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError) as e:
+                raise RuntimeError(f"Respuesta OpenAI inesperada: {result!r}") from e
+        else:
+            content = result.get("response", "")
+        return clean_response(content)
+
+    def _error_hint(self) -> str:
+        if self.api_key:
+            return (
+                f"No se pudo conectar con el LLM en {self.base_url}. "
+                "Revisa COZMO_OLLAMA_URL (debe incluir /v1) y COZMO_LLM_API_KEY."
+            )
+        return (
+            "No se pudo conectar con Ollama. Instálalo desde https://ollama.com "
+            f"y ejecuta: ollama pull {self.model}"
+        )
+
+
+# Alias de compatibilidad: el cliente ya no es exclusivo de Ollama.
+OllamaClient = LLMClient

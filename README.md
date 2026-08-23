@@ -88,14 +88,32 @@ Se abre automáticamente en `http://127.0.0.1:8000`.
 python run.py --port 9000              # otro puerto
 python run.py --lang en                # interfaz en inglés
 python run.py --ollama-model llama3.2  # otro modelo de Ollama
-python run.py --ollama-url URL         # Ollama remoto
+python run.py --ollama-url URL         # Ollama remoto (o base URL OpenAI-compatible con API key)
+python run.py --llm-api-key "sk-..."   # activa modo nube (mejor vía COZMO_LLM_API_KEY)
 python run.py --vosk-model RUTA        # modelo Vosk específico
 python run.py --fps 8                  # más fluidez de cámara
 python run.py --no-browser             # no abrir el navegador
 python run.py --log-level DEBUG        # logs detallados
 ```
 
-También con variables de entorno: `COZMO_PORT`, `COZMO_LANG`, `COZMO_OLLAMA_URL`, `COZMO_OLLAMA_MODEL`, `COZMO_VOSK_MODEL`.
+También con variables de entorno: `COZMO_PORT`, `COZMO_LANG`, `COZMO_OLLAMA_URL`, `COZMO_OLLAMA_MODEL`, `COZMO_LLM_API_KEY`, `COZMO_VOSK_MODEL`.
+
+## ☁️ LLM en la nube (OpenAI-compatible)
+
+El cliente LLM no está atado a Ollama: si defines una API key, usa cualquier endpoint **OpenAI-compatible** (`/chat/completions`, auth Bearer) en vez de Ollama local.
+
+```bash
+# La base URL debe incluir /v1 (convención OpenAI)
+export COZMO_OLLAMA_URL="https://api.tu-proveedor.com/v1"
+export COZMO_OLLAMA_MODEL="tu-modelo"
+export COZMO_LLM_API_KEY="sk-..."
+python run.py
+```
+
+- Sin `COZMO_LLM_API_KEY` → modo Ollama local (`/api/generate`), comportamiento anterior.
+- Con `COZMO_LLM_API_KEY` → modo OpenAI-compatible (nube), auth Bearer.
+- La API key **no** se registra en logs ni se muestra en la UI.
+- Compatible con cualquier proveedor OpenAI-compatible: OpenAI, DeepSeek, 通义千问 (DashScope), Kimi, GLM, Azure, etc.
 
 ## 🎙️ Modelo de voz (Vosk)
 

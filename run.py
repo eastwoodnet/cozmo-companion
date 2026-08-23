@@ -25,6 +25,11 @@ def parse_args(argv=None):
     parser.add_argument("--lang", choices=["es", "en"], default=None, help="UI/log language")
     parser.add_argument("--ollama-url", default=None, help="Ollama base URL")
     parser.add_argument("--ollama-model", default=None, help="Ollama model (default: phi3)")
+    parser.add_argument(
+        "--llm-api-key",
+        default=None,
+        help="API key para un LLM OpenAI-compatible (activa modo nube; mejor vía COZMO_LLM_API_KEY)",
+    )
     parser.add_argument("--vosk-model", default=None, help="Path to a Vosk model directory")
     parser.add_argument("--fps", type=float, default=None, help="Camera frames per second (default: 5)")
     parser.add_argument("--no-browser", action="store_true", help="Do not open the browser")
@@ -69,6 +74,8 @@ def main(argv=None) -> int:
         config.ollama_url = args.ollama_url
     if args.ollama_model:
         config.ollama_model = args.ollama_model
+    if args.llm_api_key:
+        config.llm_api_key = args.llm_api_key
     if args.vosk_model:
         from pathlib import Path
         config.vosk_model = Path(args.vosk_model)
@@ -76,12 +83,13 @@ def main(argv=None) -> int:
         config.camera_fps = args.fps
 
     url = f"http://{config.host}:{config.port}"
+    llm_mode = "nube (OpenAI-compatible)" if config.llm_api_key else "Ollama local"
     print(f"""
     🤖 Cozmo Companion
     ─────────────────────────────────────────
     Panel web:   {url}
     Idioma:      {config.language}
-    LLM:         {config.ollama_model} @ {config.ollama_url}
+    LLM:         {config.ollama_model} @ {config.ollama_url} [{llm_mode}]
     Voz (Vosk):  {config.vosk_model or 'no encontrado'}
     ─────────────────────────────────────────
     Conecta tu PC a la WiFi de Cozmo y pulsa «Conectar» en la web.
