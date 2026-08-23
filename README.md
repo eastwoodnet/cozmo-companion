@@ -60,7 +60,7 @@ Navegador ←—WebSocket—→ FastAPI (Hub, asyncio)
 
 ## 📋 Requisitos
 
-1. **Python 3.10+** (pycozmo funciona en Python moderno, a diferencia del SDK oficial).
+1. **Python 3.10+** (pycozmo funciona en Python moderno, a diferencia del SDK oficial). Compatible con 3.13/3.14: el proyecto incluye un *shim* del módulo `chunk` (eliminado de la stdlib en 3.13) que pycozmo 0.8.0 aún importa; se registra automáticamente al arrancar.
 2. **Windows: [Npcap](https://npcap.com)** — necesario para la captura de paquetes de pycozmo. Linux: ejecutar con `sudo` o capabilities de red (`setcap`).
 3. **Opcional — IA:** [Ollama](https://ollama.com) + `ollama pull phi3` (o un LLM OpenAI-compatible en la nube, ver [LLM en la nube](#-llm-en-la-nube-openai-compatible)).
 4. **Opcional — voz:** micrófono + modelo Vosk (ver abajo).
@@ -238,6 +238,7 @@ cozmo-companion/
 ├── data/                   # memoria SQLite (git-ignored)
 └── companion/
     ├── __init__.py         # __version__
+    ├── _chunk.py           # shim del módulo chunk de la stdlib (Python 3.13+, para pycozmo)
     ├── config.py
     ├── robot.py
     ├── server.py
@@ -260,7 +261,7 @@ cozmo-companion/
 | Problema | Solución |
 |---|---|
 | *"No se pudo conectar"* | Verifica que el PC está en la WiFi de Cozmo y que Npcap está instalado (Windows) |
-| *"pycozmo no está instalado"* | Activa el venv (`source .venv/bin/activate`) y `pip install -r requirements.txt` |
+| *"pycozmo no está instalado"* | Activa el venv (`source .venv/bin/activate`) y `pip install -r requirements.txt`. Si el mensaje incluye un *error de importación*, ese es el motivo real |
 | `error: externally-managed-environment` | Usa un entorno virtual (venv), ver [Instalación](#-instalación-y-ejecución) |
 | *"Ollama no responde"* | `ollama serve` en otra terminal + `ollama pull phi3` |
 | *"No se pudo conectar con el LLM"* (nube) | Revisa `COZMO_OLLAMA_URL` (debe incluir `/v1`) y `COZMO_LLM_API_KEY` |

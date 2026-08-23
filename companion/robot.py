@@ -12,22 +12,50 @@ Connection protocol (from pycozmo 0.8):
 """
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import io
 import logging
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 log = logging.getLogger("companion.robot")
 
+
+def _ensure_chunk_module() -> None:
+    """Ensure `chunk` is importable before importing pycozmo.
+
+    Python 3.13 removed the `chunk` stdlib module, but pycozmo 0.8.0 imports
+    it at package level (audiokinetic.soundbank). Register the vendored copy
+    (companion/_chunk.py) in sys.modules when the stdlib one is missing.
+    """
+    try:
+        importlib.import_module("chunk")
+        return
+    except ImportError:
+        pass
+    spec = importlib.util.spec_from_file_location(
+        "chunk", Path(__file__).with_name("_chunk.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys.modules["chunk"] = module
+
+
+PYCOZMO_IMPORT_ERROR: Optional[str] = None
+
 try:
+    _ensure_chunk_module()
     import pycozmo
 
     HAS_PYCOZMO = True
-except ImportError:
+except ImportError as e:
     pycozmo = None  # type: ignore
     HAS_PYCOZMO = False
+    PYCOZMO_IMPORT_ERROR = f"{e.__class__.__name__}: {e}"
 
 # Calibrated in Cozmo Voice Commands: at wheel speed 100 Cozmo turns ~130 deg/s.
 TURN_DEG_PER_SEC = 130.0
@@ -76,7 +104,10 @@ class Robot:
         ok, msg = False, ""
         try:
             if not HAS_PYCOZMO:
-                raise RuntimeError("pycozmo no está instalado (pip install pycozmo)")
+                msg = "pycozmo no está instalado (pip install pycozmo)"
+                if PYCOZMO_IMPORT_ERROR:
+                    msg += f" — error de importación: {PYCOZMO_IMPORT_ERROR}"
+                raise RuntimeError(msg)
             log.info("Connecting to Cozmo over WiFi...")
             client = pycozmo.Client()
             client.start()
