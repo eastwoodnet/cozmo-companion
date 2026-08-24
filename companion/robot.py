@@ -401,7 +401,7 @@ class Robot:
 
     def stop(self) -> None:
         client = self._get_client()
-        client.stop_all_motors()
+        client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
 
     def turn(self, degrees: float) -> None:
         """Turn in place; positive = left, negative = right."""
@@ -411,7 +411,7 @@ class Robot:
         client = self._get_client()
         client.drive_wheels(lwheel_speed=left, rwheel_speed=-left)
         time.sleep(duration)
-        client.stop_all_motors()
+        client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
 
     def move_lift(self, value: float) -> None:
         """Move lift, 0.0 (down) to 1.0 (up)."""
@@ -474,7 +474,7 @@ class Robot:
         time.sleep(0.3)
         client.drive_wheels(lwheel_speed=-100.0, rwheel_speed=100.0)
         time.sleep(0.3)
-        client.stop_all_motors()
+        client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
         try:
             client.set_lift_height(70.0)
         except Exception:  # noqa: BLE001
@@ -488,8 +488,8 @@ class Robot:
             duration = self._clamp(abs(angle) / TURN_DEG_PER_SEC, 0.1, 2.0)
             left = speed if angle > 0 else -speed
             client.drive_wheels(lwheel_speed=left, rwheel_speed=-left)
-            time.sleep(duration)
-        client.stop_all_motors()
+       time.sleep(duration)
+        client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
 
     # ------------------------------------------------------------------
     # Screen
