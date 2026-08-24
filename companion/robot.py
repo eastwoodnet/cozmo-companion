@@ -590,8 +590,13 @@ class Robot:
 
         Cozmo 屏幕 128x128 单色。用 PIL 渲染文字为图片，
         临时启用动画控制器发送 DisplayImage，duration 秒后关闭。
+        TTS 播放期间跳过，避免 DisplayImage 包与 OutputAudio 包交错截断音频。
         """
         client = self._get_client()
+        # TTS 播放期间不操作屏幕，避免 DisplayImage 包干扰音频流
+        if self._tts_active:
+            log.debug("display_text 跳过: TTS 播放中")
+            return
         try:
             from PIL import Image, ImageDraw, ImageFont
         except ImportError:
@@ -641,7 +646,10 @@ class Robot:
         client.enable_procedural_face(False)
         client.display_image(img)
         # 非阻塞：用 Timer 在 duration 秒后清屏并恢复动画
+        # TTS 播放期间跳过清屏，避免 DisplayImage 包干扰音频流
         def _clear_display():
+            if self._tts_active:
+                return
             try:
                 client.clear_screen()
                 client.enable_procedural_face(True)
