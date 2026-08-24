@@ -430,15 +430,47 @@ class Robot:
     # ------------------------------------------------------------------
 
     def say(self, text: str) -> None:
-        """Speak text with Cozmo's TTS voice.
+        """用 gtts 生成语音，通过 Cozmo 喇叭播放。
 
-        pycozmo 0.8.0 no expone TTS (no existe say_text ni paquete SayText);
-        se registra una advertencia y se descarta el texto.
+        gtts 生成 MP3，pydub 转 WAV（22050Hz 16-bit mono），
+        pycozmo play_audio() 播放。
         """
         text = (text or "").strip()
         if not text:
             return
-        log.warning("TTS no disponible en pycozmo 0.8.0; sin decir: %s", text[:50])
+        try:
+            from gtts import gTTS
+            from pydub import AudioSegment
+            import tempfile, os
+            # 截断到 100 字符，避免过长
+            text = text[:100]
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                mp3_path = f.name
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                wav_path = f.name
+            try:
+                tts = gTTS(text=text, lang="en")
+                tts.save(mp3_path)
+                audio = AudioSegment.from_mp3(mp3_path)
+                # Cozmo 要求 22050Hz 16-bit mono
+                audio = audio.set_frame_rate(22050).set_sample_width(2).set_channels(1)
+                audio.export(wav_path, format="wav")
+                client = self._get_client()
+                client.enable_animations(True)
+                client.play_audio(wav_path)
+                # 等待播放完成（粗略估算：每 22050 样本 0.045 秒）
+                duration = len(audio) / 1000.0
+                import time
+                time.sleep(duration + 0.5)
+                client.enable_animations(False)
+            finally:
+                for p in (mp3_path, wav_path):
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
+        except Exception as e:
+            log.warning("TTS 失败: %s", e)
 
     def play_anim(self, name: str) -> None:
         """Play a named animation; tolerates unknown names."""
@@ -507,19 +539,24 @@ class Robot:
         except ImportError:
             log.warning("PIL 未安装，无法显示文字")
             return
-        img = Image.new("1", (128, 32), 0)
+        img = Image.new("1", (128, 64), 0)
         draw = ImageDraw.Draw(img)
         try:
             font = ImageFont.load_default()
         except Exception:
             font = None
-        # 简单居中（长文本截断到 20 字符，128x32 屏幕放不下更多）
+        # 简单居中（长文本截断到 20 字符，128x64 屏幕放不下更多）
         display_text = text[:20]
         bbox = draw.textbbox((0, 0), display_text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = max(0, (128 - tw) // 2)
-        y = max(0, (32 - th) // 2)
+        y = max(0, (64 - th) // 2)
         draw.text((x, y), display_text, fill=1, font=font)
+        # Cozmo 协议只支持 128x32，取偶数行
+        import numpy as np
+        np_im = np.array(img)
+        np_im2 = np_im[::2]
+        img = Image.fromarray(np_im2)
         client.enable_animations(True)
         client.display_image(img, duration=duration)
         client.enable_animations(False)
