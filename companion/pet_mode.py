@@ -112,7 +112,7 @@ class PetMode:
         phrases = PHRASES.get(emotion, {}).get(self.lang) or PHRASES.get(emotion, {}).get("en", [])
 
         def say_phrase() -> None:
-            self._robot.say(random.choice(phrases))
+            self._robot.say(random.choice(phrases), self.lang)
 
         options = []
         if emotion == "bored":

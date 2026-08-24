@@ -297,7 +297,7 @@ class Hub:
         self.memory.add(KIND_COZMO, reply, lang=self.lang, emotion=self.emotions.get())
         await self.broadcast({"type": "chat", "role": "cozmo", "text": reply})
         if speak and self.robot.connected:
-            self.robot.submit(self._safe(self.robot.say, reply))
+            self.robot.submit(self._safe(self.robot.say, reply, self.lang))
             short = reply[:60] if len(reply) > 60 else reply
             self.robot.submit(self._safe(self.robot.display_text, short, 8.0))
 

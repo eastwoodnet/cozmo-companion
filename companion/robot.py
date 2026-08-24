@@ -429,7 +429,7 @@ class Robot:
     # Speech / animations / lights
     # ------------------------------------------------------------------
 
-    def say(self, text: str) -> None:
+    def say(self, text: str, lang: str = "en") -> None:
         """用 gtts 生成语音，ffmpeg 转 WAV，通过 Cozmo 喇叭播放。
 
         gtts 生成 MP3，ffmpeg 转 WAV（22050Hz 16-bit mono），
@@ -448,7 +448,7 @@ class Robot:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 wav_path = f.name
             try:
-                tts = gTTS(text=text, lang="en")
+                tts = gTTS(text=text, lang=lang)
                 tts.save(mp3_path)
                 # ffmpeg 转 WAV（22050Hz 16-bit mono）
                 subprocess.run(
