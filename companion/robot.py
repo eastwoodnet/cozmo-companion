@@ -439,12 +439,13 @@ class Robot:
         text = (text or "").strip()
         if not text:
             return
+        log.info("say() 调用: text=%r, lang=%s", text[:30], lang)
         # 检测语言：含中文字符用 zh-CN
         if any('\u4e00' <= c <= '\u9fff' for c in text):
             lang = "zh-CN"
         try:
             from gtts import gTTS
-            import tempfile, os, subprocess, time
+            import tempfile, os, subprocess, time, threading
             # 截断到 100 字符，避免过长
             text = text[:100]
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
@@ -464,11 +465,12 @@ class Robot:
                 client = self._get_client()
                 client.enable_animations(True)
                 client.play_audio(wav_path)
-                # 估算播放时长（粗略：MP3 文件大小 / 码率）
+                # 估算播放时长，用 Timer 延迟关闭动画（不阻塞线程池）
                 mp3_size = os.path.getsize(mp3_path)
                 duration = mp3_size / (16000 / 8)  # 16kbps
-                time.sleep(duration + 0.5)
-                client.enable_animations(False)
+                timer = threading.Timer(duration + 0.5, client.enable_animations, args=(False,))
+                timer.daemon = True
+                timer.start()
             finally:
                 for p in (mp3_path, wav_path):
                     try:

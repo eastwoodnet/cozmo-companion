@@ -197,12 +197,15 @@ class LLMClient:
         self,
         emotion_modifier: Optional[str] = None,
         context: Optional[str] = None,
+        lang: Optional[str] = None,
     ) -> str:
         parts = [PERSONALITIES[self.personality]["prompt"]]
         if emotion_modifier:
             parts.append(emotion_modifier)
         if context:
             parts.append(f"Recent conversation:\n{context}")
+        if lang:
+            parts.append(f"CRITICAL: The user is speaking {lang}. You MUST respond ONLY in {lang}.")
         return "\n".join(parts)
 
     def chat(
@@ -212,12 +215,13 @@ class LLMClient:
         context: Optional[str] = None,
         timeout: int = 60,
         max_tokens: int = 80,
+        lang: Optional[str] = None,
     ) -> str:
         """Send text to the LLM and return the cleaned response.
 
         Modo OpenAI-compatible si hay API key; Ollama si no.
         """
-        system_prompt = self.build_system_prompt(emotion_modifier, context)
+        system_prompt = self.build_system_prompt(emotion_modifier, context, lang)
         if self.api_key:
             url = self.base_url + "/chat/completions"
             headers = {

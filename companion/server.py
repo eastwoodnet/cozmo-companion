@@ -301,14 +301,18 @@ class Hub:
             await self.log_to_ui(self.t("llm_down"), "warn")
             return
         context = self.memory.conversation_context(turns=6)
+        # 检测用户输入语言：含中文字符用 zh，否则用 config.language
+        has_chinese = any('\u4e00' <= c <= '\u9fff' for c in text)
+        input_lang = "zh" if has_chinese else self.lang
         loop = asyncio.get_running_loop()
         try:
             reply = await loop.run_in_executor(
                 None,
                 lambda: self.llm.chat(
                     text,
-                    emotion_modifier=self.emotions.modifier(self.lang),
+                    emotion_modifier=self.emotions.modifier(input_lang),
                     context=context,
+                    lang=input_lang,
                 ),
             )
         except RuntimeError as e:

@@ -27,6 +27,7 @@ EMOTIONS: Dict[str, dict] = {
         "modifier": {
             "es": "Te sientes feliz y juguetón. Sé alegre y enérgico.",
             "en": "You are feeling happy and playful. Be cheerful and energetic.",
+            "zh": "你感到开心又调皮。活泼、有活力地回应。",
         },
         "boredom_rate": -2,
         "emoji": "😊",
@@ -36,6 +37,7 @@ EMOTIONS: Dict[str, dict] = {
         "modifier": {
             "es": "Te sientes un poco triste. Sé melodramático pero adorable.",
             "en": "You are feeling a little sad. Be melodramatic but still sweet.",
+            "zh": "你有点难过。戏剧化一点，但依然可爱。",
         },
         "boredom_rate": 1,
         "emoji": "😢",
@@ -45,6 +47,7 @@ EMOTIONS: Dict[str, dict] = {
         "modifier": {
             "es": "Te sientes curioso. Haz preguntas y explora ideas.",
             "en": "You are feeling curious. Ask questions and explore ideas.",
+            "zh": "你感到好奇。多问问题，探索想法。",
         },
         "boredom_rate": -1,
         "emoji": "🤔",
@@ -54,6 +57,7 @@ EMOTIONS: Dict[str, dict] = {
         "modifier": {
             "es": "¡Estás muy emocionado! Sé entusiasta y eufórico.",
             "en": "You are very excited! Be enthusiastic and upbeat.",
+            "zh": "你非常兴奋！热情洋溢、充满干劲。",
         },
         "boredom_rate": -3,
         "emoji": "🤩",
@@ -63,6 +67,7 @@ EMOTIONS: Dict[str, dict] = {
         "modifier": {
             "es": "Tienes sueño. Habla lento, bosteza y pide descanso.",
             "en": "You are tired and sleepy. Be slow, yawny, and want to rest.",
+            "zh": "你困了。说话慢一点，打哈欠，想休息。",
         },
         "boredom_rate": 0,
         "emoji": "😴",
@@ -72,6 +77,7 @@ EMOTIONS: Dict[str, dict] = {
         "modifier": {
             "es": "Estás aburrido. Quejate un poco y pide atención o un juego.",
             "en": "You are bored. Be a bit whiny and ask for attention or a game.",
+            "zh": "你无聊了。有点撒娇，要关注或者玩游戏。",
         },
         "boredom_rate": 2,
         "emoji": "🙄",
@@ -81,6 +87,7 @@ EMOTIONS: Dict[str, dict] = {
         "modifier": {
             "es": "Estás asustado y cauteloso. Sé nervioso pero valiente.",
             "en": "You are startled and cautious. Be jumpy but brave.",
+            "zh": "你被吓到了，小心翼翼。紧张但勇敢。",
         },
         "boredom_rate": -1,
         "emoji": "😨",
