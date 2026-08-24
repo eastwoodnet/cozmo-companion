@@ -466,10 +466,16 @@ class Robot:
                 client.enable_animations(True)
                 client.play_audio(wav_path)
                 # 用 WAV 文件大小计算精确时长（22050Hz 16-bit mono = 44100 bytes/sec）
+                # 动画循环实际帧率 ~25 FPS（非 30），每包 744 样本
+                # 353 包 / 25 FPS ≈ 14.1 sec，需安全系数防止截断
                 wav_size = os.path.getsize(wav_path)
                 duration = wav_size / 44100.0
-                log.info("TTS 时长: %.1f sec", duration)
-                timer = threading.Timer(duration + 0.5, client.enable_animations, args=(False,))
+                # 每包 744 样本，实际发送时间 = 包数 / 实际帧率
+                pkt_count = wav_size // (744 * 2)  # 744 samples * 2 bytes
+                send_time = pkt_count / 25.0  # 保守估计 25 FPS
+                timer_delay = max(duration, send_time) + 1.5
+                log.info("TTS: duration=%.1f sec, pkts=%d, timer=%.1f sec", duration, pkt_count, timer_delay)
+                timer = threading.Timer(timer_delay, client.enable_animations, args=(False,))
                 timer.daemon = True
                 timer.start()
             finally:
