@@ -152,6 +152,7 @@ class Robot:
         self._last_state_ts = 0.0
         self._auto_reconnect = False
         self._connecting = False
+        self._tts_active = False
         self._cliff_locked = False
 
     # ------------------------------------------------------------------
@@ -302,11 +303,14 @@ class Robot:
             connected = self._connected
             last = self._last_state_ts
             auto = self._auto_reconnect
+            tts = self._tts_active
         if connected and client is not None:
             state = getattr(getattr(client, "conn", None), "state", None)
             if state is not None and state != _CONNECTED_STATE:
                 return "sesión cerrada por el robot (Disconnect)"
-            if last and time.monotonic() - last > STALE_STATE_SECS:
+            # TTS 播放期间音频包占满 SendThread，RobotState 可能延迟 30s+
+            # 跳过 stale 检查避免 watchdog 误触发重连
+            if not tts and last and time.monotonic() - last > STALE_STATE_SECS:
                 return f"sin RobotState desde hace {time.monotonic() - last:.0f}s"
             return None
         if auto:
@@ -463,6 +467,7 @@ class Robot:
                     capture_output=True, timeout=10,
                 )
                 client = self._get_client()
+                self._tts_active = True
                 client.enable_animations(True)
                 client.play_audio(wav_path)
                 # 用 WAV 文件大小计算精确时长（22050Hz 16-bit mono = 44100 bytes/sec）
@@ -475,7 +480,10 @@ class Robot:
                 send_time = pkt_count / 25.0  # 保守估计 25 FPS
                 timer_delay = max(duration, send_time) + 1.5
                 log.info("TTS: duration=%.1f sec, pkts=%d, timer=%.1f sec", duration, pkt_count, timer_delay)
-                timer = threading.Timer(timer_delay, client.enable_animations, args=(False,))
+                def _tts_done():
+                    self._tts_active = False
+                    client.enable_animations(False)
+                timer = threading.Timer(timer_delay, _tts_done)
                 timer.daemon = True
                 timer.start()
             finally:

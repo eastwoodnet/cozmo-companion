@@ -325,8 +325,9 @@ class Hub:
         await self.broadcast({"type": "chat", "role": "cozmo", "text": reply})
         if speak and self.robot.connected:
             self.robot.submit(self._safe(self.robot.say, reply, self.lang))
-            short = reply[:60] if len(reply) > 60 else reply
-            self.robot.submit(self._safe(self.robot.display_text, short, 8.0))
+            # 临时禁用屏幕显示，单独验证音频流完整性
+            # short = reply[:60] if len(reply) > 60 else reply
+            # self.robot.submit(self._safe(self.robot.display_text, short, 8.0))
 
     # ------------------------------------------------------------------
     # Voice (STT callbacks run on the Vosk thread)
