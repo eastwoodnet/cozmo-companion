@@ -350,8 +350,8 @@ class Robot:
     def drive(self, left: float, right: float, duration: float = 0.3) -> None:
         """Drive wheels at given speeds.
 
-        发 DriveWheels 包后立即发 StopAllMotors，不阻塞执行器线程。
-        duration 参数保留兼容但不再 sleep。
+        发 DriveWheels 包后等 50ms 让轮子加速，再发 StopAllMotors。
+        50ms 足够轮子从 0 加速到目标速度，移动距离明显。
         Cliff bit 设位时拒绝驱动，防止 Cozmo 在悬崖边继续前进。
         """
         if self._cliff_locked:
@@ -359,6 +359,7 @@ class Robot:
             return
         client = self._get_client()
         client.drive_wheels(lwheel_speed=float(left), rwheel_speed=float(right))
+        time.sleep(0.05)
         client.stop_all_motors()
 
     def stop(self) -> None:
@@ -371,7 +372,9 @@ class Robot:
         duration = self._clamp(abs(degrees) / TURN_DEG_PER_SEC, 0.1, 2.0)
         left = speed if degrees > 0 else -speed
         client = self._get_client()
-        client.drive_wheels(lwheel_speed=left, rwheel_speed=-left, duration=duration)
+        client.drive_wheels(lwheel_speed=left, rwheel_speed=-left)
+        time.sleep(duration)
+        client.stop_all_motors()
 
     def move_lift(self, value: float) -> None:
         """Move lift, 0.0 (down) to 1.0 (up)."""
@@ -427,11 +430,15 @@ class Robot:
     # ------------------------------------------------------------------
 
     def dance(self) -> None:
-        """Little victory dance: spin + lift. 不阻塞执行器线程。"""
+        """Little victory dance: spin + lift."""
         client = self._get_client()
         self.set_lights((255, 80, 0))
-        client.drive_wheels(lwheel_speed=100.0, rwheel_speed=-100.0, duration=0.3)
-        client.drive_wheels(lwheel_speed=-100.0, rwheel_speed=100.0, duration=0.3)
+        client.drive_wheels(lwheel_speed=100.0, rwheel_speed=-100.0)
+        time.sleep(0.3)
+        client.stop_all_motors()
+        client.drive_wheels(lwheel_speed=-100.0, rwheel_speed=100.0)
+        time.sleep(0.3)
+        client.stop_all_motors()
         try:
             client.set_lift_height(70.0)
         except Exception:  # noqa: BLE001
@@ -444,7 +451,9 @@ class Robot:
             speed = 100.0
             duration = self._clamp(abs(angle) / TURN_DEG_PER_SEC, 0.1, 2.0)
             left = speed if angle > 0 else -speed
-            client.drive_wheels(lwheel_speed=left, rwheel_speed=-left, duration=duration)
+            client.drive_wheels(lwheel_speed=left, rwheel_speed=-left)
+            time.sleep(duration)
+            client.stop_all_motors()
 
     # ------------------------------------------------------------------
     # Screen
