@@ -430,9 +430,9 @@ class Robot:
     # ------------------------------------------------------------------
 
     def say(self, text: str) -> None:
-        """用 gtts 生成语音，通过 Cozmo 喇叭播放。
+        """用 gtts 生成语音，ffmpeg 转 WAV，通过 Cozmo 喇叭播放。
 
-        gtts 生成 MP3，pydub 转 WAV（22050Hz 16-bit mono），
+        gtts 生成 MP3，ffmpeg 转 WAV（22050Hz 16-bit mono），
         pycozmo play_audio() 播放。
         """
         text = (text or "").strip()
@@ -440,8 +440,7 @@ class Robot:
             return
         try:
             from gtts import gTTS
-            from pydub import AudioSegment
-            import tempfile, os
+            import tempfile, os, subprocess, time
             # 截断到 100 字符，避免过长
             text = text[:100]
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
@@ -451,16 +450,19 @@ class Robot:
             try:
                 tts = gTTS(text=text, lang="en")
                 tts.save(mp3_path)
-                audio = AudioSegment.from_mp3(mp3_path)
-                # Cozmo 要求 22050Hz 16-bit mono
-                audio = audio.set_frame_rate(22050).set_sample_width(2).set_channels(1)
-                audio.export(wav_path, format="wav")
+                # ffmpeg 转 WAV（22050Hz 16-bit mono）
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", mp3_path,
+                     "-ar", "22050", "-ac", "1", "-sample_fmt", "s16",
+                     wav_path],
+                    capture_output=True, timeout=10,
+                )
                 client = self._get_client()
                 client.enable_animations(True)
                 client.play_audio(wav_path)
-                # 等待播放完成（粗略估算：每 22050 样本 0.045 秒）
-                duration = len(audio) / 1000.0
-                import time
+                # 估算播放时长（粗略：MP3 文件大小 / 码率）
+                mp3_size = os.path.getsize(mp3_path)
+                duration = mp3_size / (16000 / 8)  # 16kbps
                 time.sleep(duration + 0.5)
                 client.enable_animations(False)
             finally:
@@ -541,12 +543,16 @@ class Robot:
             return
         img = Image.new("1", (128, 64), 0)
         draw = ImageDraw.Draw(img)
+        # 用 TTF 字体（16px），默认字体只有 8px 取偶数行后看不清
         try:
-            font = ImageFont.load_default()
+            font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoMono-Regular.ttf", 16)
         except Exception:
-            font = None
-        # 简单居中（长文本截断到 20 字符，128x64 屏幕放不下更多）
-        display_text = text[:20]
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", 16)
+            except Exception:
+                font = ImageFont.load_default()
+        # 简单居中（长文本截断到 12 字符，16px 字体 128px 宽放不下更多）
+        display_text = text[:12]
         bbox = draw.textbbox((0, 0), display_text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = max(0, (128 - tw) // 2)
