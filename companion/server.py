@@ -94,12 +94,35 @@ LOG_STRINGS = {
         "rec_saved": "🎬 Video saved",
         "rec_empty": "No frames to save (is the camera on?)",
     },
+    "zh": {
+        "connecting": "正在通过 WiFi 连接 Cozmo...",
+        "connected": "Cozmo 已连接！",
+        "connect_failed": "连接失败。你连的是 Cozmo 的 WiFi 吗？",
+        "disconnected": "Cozmo 已断开",
+        "need_robot": "Cozmo 未连接",
+        "cmd_not_recognized": "没听懂这个命令",
+        "stt_unavailable": "语音不可用（缺少 Vosk 模型或麦克风）",
+        "llm_down": "LLM 无响应",
+        "pet_on": "宠物模式已开启 🐾",
+        "pet_off": "宠物模式已关闭",
+        "memory_cleared": "记忆已清除 🧠✕",
+        "wake_on": "唤醒词已开启：说「Cozmo」加命令 🗣️",
+        "wake_off": "唤醒词已关闭",
+        "wake_busy": "唤醒词已在监听；按 🎤 停止",
+        "faces_on": "人脸识别已开启 👤",
+        "faces_off": "人脸识别已关闭",
+        "face_seen": "我看到你了！👤",
+        "rec_on": "⏺️ 正在录像...",
+        "rec_saved": "🎬 视频已保存",
+        "rec_empty": "没有可保存的画面（相机开了吗？）",
+    },
 }
 
-WAKE_WORDS = ("cozmo", "cosmo")
+WAKE_WORDS = ("cozmo", "cosmo", "小智")
 WAKE_ACKS = {
     "es": ["¿Sí?", "¿Dime?", "¿Qué pasa?"],
     "en": ["Yes?", "I'm listening", "What is it?"],
+    "zh": ["嗯？", "我在听", "怎么了？"],
 }
 
 
