@@ -513,12 +513,13 @@ class Robot:
             font = ImageFont.load_default()
         except Exception:
             font = None
-        # 简单居中
-        bbox = draw.textbbox((0, 0), text, font=font)
+        # 简单居中（长文本截断到 30 字符，128px 屏幕放不下更多）
+        display_text = text[:30]
+        bbox = draw.textbbox((0, 0), display_text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = max(0, (128 - tw) // 2)
         y = max(0, (128 - th) // 2)
-        draw.text((x, y), text, fill=255, font=font)
+        draw.text((x, y), display_text, fill=255, font=font)
         client.enable_animations(True)
         client.display_image(img, duration=duration)
         client.enable_animations(False)
