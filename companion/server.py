@@ -325,9 +325,8 @@ class Hub:
         await self.broadcast({"type": "chat", "role": "cozmo", "text": reply})
         if speak and self.robot.connected:
             self.robot.submit(self._safe(self.robot.say, reply, self.lang))
-            # 临时禁用屏幕显示，单独验证音频流完整性
-            # short = reply[:60] if len(reply) > 60 else reply
-            # self.robot.submit(self._safe(self.robot.display_text, short, 8.0))
+            short = reply[:60] if len(reply) > 60 else reply
+            self.robot.submit(self._safe(self.robot.display_text, short, 8.0))
 
     # ------------------------------------------------------------------
     # Voice (STT callbacks run on the Vosk thread)
@@ -682,6 +681,11 @@ class Hub:
         face_future = None
         while True:
             try:
+                # TTS 播放期间暂停摄像头广播：JPEG 帧（~50-200KB）+ 音频包
+                # 同时传输会占满 WiFi 上行，导致 RobotState 延迟 30s+ 触发断开
+                if self.robot._tts_active:
+                    await asyncio.sleep(interval)
+                    continue
                 if self.clients and self.robot.connected and self.robot.camera_enabled:
                     data = self.robot.latest_jpeg(self.config.camera_quality)
                     if data:

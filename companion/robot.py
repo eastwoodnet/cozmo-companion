@@ -147,7 +147,7 @@ class Robot:
         self._client = None
         self._connected = False
         self._lock = threading.RLock()
-        self._exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cozmo")
+        self._exec = ThreadPoolExecutor(max_workers=4, thread_name_prefix="cozmo")
         self._camera_enabled = False
         self._last_state_ts = 0.0
         self._auto_reconnect = False
@@ -414,8 +414,15 @@ class Robot:
         left = speed if degrees > 0 else -speed
         client = self._get_client()
         client.drive_wheels(lwheel_speed=left, rwheel_speed=-left)
-        time.sleep(duration)
-        client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
+        # 用 Timer 代替 time.sleep，避免阻塞线程池
+        def _stop_turn():
+            try:
+                client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
+            except Exception:  # noqa: BLE001
+                pass
+        timer = threading.Timer(duration, _stop_turn)
+        timer.daemon = True
+        timer.start()
 
     def move_lift(self, value: float) -> None:
         """Move lift, 0.0 (down) to 1.0 (up)."""
@@ -443,57 +450,85 @@ class Robot:
         text = (text or "").strip()
         if not text:
             return
+        # 过滤 emoji 和非文字符号，只朗读文字部分
+        import re
+        text = re.sub(
+            r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF'
+            r'\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF'
+            r'\U00002700-\U000027BF\U0001F900-\U0001F9FF'
+            r'\U00002600-\U000026FF\U0000FE0F'
+            r'\U0001F000-\U0001F02F\U0001FA70-\U0001FAFF'
+            r'\U00002B00-\U00002BFF]+',
+            '', text
+        )
+        # 清理多余空格
+        text = re.sub(r'\s+', ' ', text).strip()
+        if not text:
+            return
         log.info("say() 调用: text=%r, lang=%s", text[:30], lang)
         # 检测语言：含中文字符用 zh-CN
         if any('\u4e00' <= c <= '\u9fff' for c in text):
             lang = "zh-CN"
-        try:
-            from gtts import gTTS
-            import tempfile, os, subprocess, time, threading
-            # 截断到 100 字符，避免过长
-            text = text[:100]
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-                mp3_path = f.name
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                wav_path = f.name
+        # 截断到 100 字符，避免过长
+        text = text[:100]
+
+        def _tts_worker():
             try:
-                tts = gTTS(text=text, lang=lang)
-                tts.save(mp3_path)
-                # ffmpeg 转 WAV（22050Hz 16-bit mono）
-                subprocess.run(
-                    ["ffmpeg", "-y", "-i", mp3_path,
-                     "-ar", "22050", "-ac", "1", "-sample_fmt", "s16",
-                     wav_path],
-                    capture_output=True, timeout=10,
-                )
-                client = self._get_client()
-                self._tts_active = True
-                client.enable_animations(True)
-                client.play_audio(wav_path)
-                # 用 WAV 文件大小计算精确时长（22050Hz 16-bit mono = 44100 bytes/sec）
-                # 动画循环实际帧率 ~25 FPS（非 30），每包 744 样本
-                # 353 包 / 25 FPS ≈ 14.1 sec，需安全系数防止截断
-                wav_size = os.path.getsize(wav_path)
-                duration = wav_size / 44100.0
-                # 每包 744 样本，实际发送时间 = 包数 / 实际帧率
-                pkt_count = wav_size // (744 * 2)  # 744 samples * 2 bytes
-                send_time = pkt_count / 25.0  # 保守估计 25 FPS
-                timer_delay = max(duration, send_time) + 1.5
-                log.info("TTS: duration=%.1f sec, pkts=%d, timer=%.1f sec", duration, pkt_count, timer_delay)
-                def _tts_done():
-                    self._tts_active = False
-                    client.enable_animations(False)
-                timer = threading.Timer(timer_delay, _tts_done)
-                timer.daemon = True
-                timer.start()
-            finally:
-                for p in (mp3_path, wav_path):
+                from gtts import gTTS
+                import tempfile, os, subprocess
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                    mp3_path = f.name
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                    wav_path = f.name
+                try:
+                    tts = gTTS(text=text, lang=lang)
+                    tts.save(mp3_path)
+                    # ffmpeg 转 WAV（22050Hz 16-bit mono）
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", mp3_path,
+                         "-ar", "22050", "-ac", "1", "-sample_fmt", "s16",
+                         wav_path],
+                        capture_output=True, timeout=10,
+                    )
+                    client = self._get_client()
+                    self._tts_active = True
+                    client.enable_animations(True)
+                    # TTS 期间清除 last_image_pkt，避免 anim_controller 每帧重发
+                    # 完整 128x32 图片（~1KB/帧 × 25fps = 25KB/s），占满 WiFi 上行
+                    # 导致 RobotState 接收延迟 30s+，触发 stale watchdog 断开。
                     try:
-                        os.unlink(p)
-                    except OSError:
+                        client.anim_controller._clear_last_image_pkt()
+                    except Exception:  # noqa: BLE001
                         pass
-        except Exception as e:
-            log.warning("TTS 失败: %s", e)
+                    client.play_audio(wav_path)
+                    # 用 WAV 文件大小计算精确时长（22050Hz 16-bit mono = 44100 bytes/sec）
+                    # 动画循环实际帧率 ~25 FPS（非 30），每包 744 样本
+                    # 353 包 / 25 FPS ≈ 14.1 sec，需安全系数防止截断
+                    wav_size = os.path.getsize(wav_path)
+                    duration = wav_size / 44100.0
+                    # 每包 744 样本，实际发送时间 = 包数 / 实际帧率
+                    pkt_count = wav_size // (744 * 2)  # 744 samples * 2 bytes
+                    send_time = pkt_count / 25.0  # 保守估计 25 FPS
+                    timer_delay = max(duration, send_time) + 1.5
+                    log.info("TTS: duration=%.1f sec, pkts=%d, timer=%.1f sec", duration, pkt_count, timer_delay)
+                    def _tts_done():
+                        self._tts_active = False
+                        client.enable_animations(False)
+                    timer = threading.Timer(timer_delay, _tts_done)
+                    timer.daemon = True
+                    timer.start()
+                finally:
+                    for p in (mp3_path, wav_path):
+                        try:
+                            os.unlink(p)
+                        except OSError:
+                            pass
+            except Exception as e:
+                log.warning("TTS 失败: %s", e)
+
+        # 在单独线程执行 gtts/ffmpeg，避免阻塞线程池
+        t = threading.Thread(target=_tts_worker, daemon=True)
+        t.start()
 
     def play_anim(self, name: str) -> None:
         """Play a named animation; tolerates unknown names."""
@@ -604,9 +639,18 @@ class Robot:
         img = Image.fromarray(np_im2)
         client.enable_animations(True)
         client.enable_procedural_face(False)
-        client.display_image(img, duration=duration)
-        client.enable_procedural_face(True)
-        client.enable_animations(False)
+        client.display_image(img)
+        # 非阻塞：用 Timer 在 duration 秒后清屏并恢复动画
+        def _clear_display():
+            try:
+                client.clear_screen()
+                client.enable_procedural_face(True)
+                client.enable_animations(False)
+            except Exception:  # noqa: BLE001
+                pass
+        timer = threading.Timer(duration, _clear_display)
+        timer.daemon = True
+        timer.start()
 
     # ------------------------------------------------------------------
     # Camera
