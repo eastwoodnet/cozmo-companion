@@ -488,7 +488,7 @@ class Robot:
             duration = self._clamp(abs(angle) / TURN_DEG_PER_SEC, 0.1, 2.0)
             left = speed if angle > 0 else -speed
             client.drive_wheels(lwheel_speed=left, rwheel_speed=-left)
-       time.sleep(duration)
+            time.sleep(duration)
         client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
 
     # ------------------------------------------------------------------
