@@ -507,19 +507,19 @@ class Robot:
         except ImportError:
             log.warning("PIL 未安装，无法显示文字")
             return
-        img = Image.new("L", (128, 128), 0)
+        img = Image.new("1", (128, 32), 0)
         draw = ImageDraw.Draw(img)
         try:
             font = ImageFont.load_default()
         except Exception:
             font = None
-        # 简单居中（长文本截断到 30 字符，128px 屏幕放不下更多）
-        display_text = text[:30]
+        # 简单居中（长文本截断到 20 字符，128x32 屏幕放不下更多）
+        display_text = text[:20]
         bbox = draw.textbbox((0, 0), display_text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = max(0, (128 - tw) // 2)
-        y = max(0, (128 - th) // 2)
-        draw.text((x, y), display_text, fill=255, font=font)
+        y = max(0, (32 - th) // 2)
+        draw.text((x, y), display_text, fill=1, font=font)
         client.enable_animations(True)
         client.display_image(img, duration=duration)
         client.enable_animations(False)
