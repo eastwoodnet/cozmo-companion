@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,9 +20,9 @@
       <span class="dot" id="conn-dot"></span>
       <span id="conn-text">Offline</span>
     </div>
-    <div class="status-pill" id="battery-pill" title="Batería">🔋 <span id="battery">—</span></div>
-    <button class="btn btn-primary" id="btn-connect">Conectar</button>
-    <button class="btn btn-ghost" id="btn-lang">EN</button>
+    <div class="status-pill" id="battery-pill" title="Battery">🔋 <span id="battery">—</span></div>
+    <button class="btn btn-primary" id="btn-connect">Connect</button>
+    <button class="btn btn-ghost" id="btn-lang">ES</button>
   </div>
 </header>
 
@@ -31,12 +31,12 @@
   <!-- CÁMARA -->
   <section class="card camera-card">
     <div class="card-header">
-      <h2 data-i18n="camera">Cámara</h2>
+      <h2 data-i18n="camera">Camera</h2>
       <div class="row">
-        <button class="btn btn-small" id="btn-camera" disabled data-i18n="cam_on">Activar</button>
-        <button class="btn btn-small" id="btn-photo" disabled title="Foto">📸</button>
-        <button class="btn btn-small" id="btn-record" disabled title="Grabar video">⏺️</button>
-        <button class="btn btn-small" id="btn-faces" disabled title="Detección de caras" style="display:none">👤</button>
+        <button class="btn btn-small" id="btn-camera" disabled data-i18n="cam_on">Enable</button>
+        <button class="btn btn-small" id="btn-photo" disabled title="Photo">📸</button>
+        <button class="btn btn-small" id="btn-record" disabled title="Record video">⏺️</button>
+        <button class="btn btn-small" id="btn-faces" disabled title="Face detection" style="display:none">👤</button>
       </div>
     </div>
     <div class="camera-box">
@@ -47,7 +47,7 @@
 
   <!-- MOVIMIENTO -->
   <section class="card">
-    <div class="card-header"><h2 data-i18n="movement">Movimiento</h2></div>
+    <div class="card-header"><h2 data-i18n="movement">Movement</h2></div>
     <div class="dpad-wrap">
       <div class="dpad">
         <button class="dpad-btn up"    data-drive="0,100,100" title="W / ↑">▲</button>
@@ -56,23 +56,23 @@
         <button class="dpad-btn right" data-drive="1,100,-100" title="D / →">▶</button>
         <button class="dpad-btn down"  data-drive="0,-100,-100" title="S / ↓">▼</button>
       </div>
-      <p class="hint" data-i18n="drive_hint">Mantén pulsado o usa WASD / flechas</p>
+      <p class="hint" data-i18n="drive_hint">Hold or use WASD / arrow keys</p>
     </div>
     <div class="sliders">
-      <label>💪 <span data-i18n="lift">Brazo</span>
+      <label>💪 <span data-i18n="lift">Lift</span>
         <input type="range" id="slider-lift" min="0" max="100" value="50" disabled>
       </label>
-      <label>🗿 <span data-i18n="head">Cabeza</span>
+      <label>🗿 <span data-i18n="head">Head</span>
         <input type="range" id="slider-head" min="0" max="100" value="50" disabled>
       </label>
     </div>
     <div class="row wrap">
-      <button class="btn" id="btn-dance" disabled>🕺 <span data-i18n="dance">Bailar</span></button>
-      <button class="btn" id="btn-look" disabled>👀 <span data-i18n="look">Explorar</span></button>
-      <button class="btn" id="btn-pet">🐾 <span data-i18n="pet">Mascota</span></button>
+      <button class="btn" id="btn-dance" disabled>🕺 <span data-i18n="dance">Dance</span></button>
+      <button class="btn" id="btn-look" disabled>👀 <span data-i18n="look">Look around</span></button>
+      <button class="btn" id="btn-pet">🐾 <span data-i18n="pet">Pet</span></button>
     </div>
     <div class="lights">
-      <span data-i18n="lights">Luces</span>:
+      <span data-i18n="lights">Lights</span>:
       <div class="swatches" id="swatches"></div>
       <input type="color" id="color-picker" value="#00ff00" title="Color personalizado" disabled>
     </div>
@@ -81,33 +81,33 @@
   <!-- CHAT / VOZ -->
   <section class="card chat-card">
     <div class="card-header">
-      <h2 data-i18n="chat">Conversación</h2>
+      <h2 data-i18n="chat">Conversation</h2>
       <div class="row">
-        <span class="mem-pill" title="Memoria">🧠 <span id="mem-count">0</span>
-          <button class="mem-clear" id="btn-mem-clear" title="Borrar memoria">✕</button>
+        <span class="mem-pill" title="Memory">🧠 <span id="mem-count">0</span>
+          <button class="mem-clear" id="btn-mem-clear" title="Clear memory">✕</button>
         </span>
         <select id="personality" class="select" title="Personalidad"></select>
       </div>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-row">
-      <input type="text" id="chat-input" data-i18n-ph="chat_ph" placeholder="Escríbele algo a Cozmo...">
-      <button class="btn btn-icon" id="btn-wake" style="display:none" title="Wake-word: di «Cozmo»...">🗣️</button>
-      <button class="btn btn-icon" id="btn-mic" style="display:none" title="Voz">🎤</button>
+      <input type="text" id="chat-input" data-i18n-ph="chat_ph" placeholder="Say something to Cozmo...">
+      <button class="btn btn-icon" id="btn-wake" style="display:none" title="Wake-word: say 'Cozmo'...">🗣️</button>
+      <button class="btn btn-icon" id="btn-mic" style="display:none" title="Voice">🎤</button>
       <button class="btn btn-primary" id="btn-chat-send">➤</button>
     </div>
     <div class="stt-bar" id="stt-bar" style="display:none">
       <span class="pulse"></span><span id="stt-partial">...</span>
     </div>
     <div class="chat-input-row">
-      <input type="text" id="cmd-input" data-i18n-ph="cmd_ph" placeholder="Comando: «cozmo avanza 2», «baila»...">
+      <input type="text" id="cmd-input" data-i18n-ph="cmd_ph" placeholder="Command: 'cozmo forward 2', 'dance'...">
       <button class="btn" id="btn-cmd-send">⌨️</button>
     </div>
   </section>
 
   <!-- EMOCIONES -->
   <section class="card">
-    <div class="card-header"><h2 data-i18n="emotions">Emociones</h2></div>
+    <div class="card-header"><h2 data-i18n="emotions">Emotions</h2></div>
     <div class="emotion-display">
       <span class="emotion-emoji" id="emotion-emoji">🤔</span>
       <div>

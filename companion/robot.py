@@ -343,28 +343,30 @@ class Robot:
     # ------------------------------------------------------------------
 
     def drive(self, left: float, right: float, duration: float = 0.3) -> None:
-        """Drive wheels at given speeds for a clamped duration.
+        """Drive wheels at given speeds.
 
+        发 DriveWheels 包后立即发 StopAllMotors，不阻塞执行器线程。
+        duration 参数保留兼容但不再 sleep。
         Cliff bit 设位时拒绝驱动，防止 Cozmo 在悬崖边继续前进。
         """
         if self._cliff_locked:
             log.warning("Drive bloqueado: acantilado")
             return
         client = self._get_client()
-        duration = self._clamp(float(duration), 0.05, MAX_DRIVE_DURATION)
-        client.drive_wheels(lwheel_speed=float(left), rwheel_speed=float(right), duration=duration)
+        client.drive_wheels(lwheel_speed=float(left), rwheel_speed=float(right))
+        client.stop_all_motors()
 
     def stop(self) -> None:
         client = self._get_client()
-        client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0, duration=0.1)
+        client.stop_all_motors()
 
     def turn(self, degrees: float) -> None:
         """Turn in place; positive = left, negative = right."""
         speed = 100.0
         duration = self._clamp(abs(degrees) / TURN_DEG_PER_SEC, 0.1, 2.0)
         left = speed if degrees > 0 else -speed
-        self.drive(left, -left, duration)
-        time.sleep(duration + 0.05)
+        client = self._get_client()
+        client.drive_wheels(lwheel_speed=left, rwheel_speed=-left, duration=duration)
 
     def move_lift(self, value: float) -> None:
         """Move lift, 0.0 (down) to 1.0 (up)."""
@@ -398,10 +400,8 @@ class Robot:
         client = self._get_client()
         try:
             client.play_anim(name)
-            time.sleep(2.0)
         except Exception as e:  # noqa: BLE001
             log.warning("Animation %s failed: %s", name, e)
-            time.sleep(0.5)
 
     def set_lights(self, rgb: Tuple[int, int, int]) -> None:
         client = self._get_client()
@@ -419,26 +419,24 @@ class Robot:
     # ------------------------------------------------------------------
 
     def dance(self) -> None:
-        """Little victory dance: spin + lift."""
+        """Little victory dance: spin + lift. 不阻塞执行器线程。"""
         client = self._get_client()
         self.set_lights((255, 80, 0))
-        for _ in range(3):
-            client.drive_wheels(lwheel_speed=100.0, rwheel_speed=-100.0, duration=0.3)
-            time.sleep(0.15)
-            client.drive_wheels(lwheel_speed=-100.0, rwheel_speed=100.0, duration=0.3)
-            time.sleep(0.15)
+        client.drive_wheels(lwheel_speed=100.0, rwheel_speed=-100.0, duration=0.3)
+        client.drive_wheels(lwheel_speed=-100.0, rwheel_speed=100.0, duration=0.3)
         try:
-            client.move_lift(1.0)
-            time.sleep(0.4)
-            client.move_lift(0.0)
+            client.set_lift_height(70.0)
         except Exception:  # noqa: BLE001
             pass
 
     def look_around(self) -> None:
         """Scan the surroundings turning left and right."""
+        client = self._get_client()
         for angle in (35, -70, 35, -30):
-            self.turn(float(angle))
-            time.sleep(0.2)
+            speed = 100.0
+            duration = self._clamp(abs(angle) / TURN_DEG_PER_SEC, 0.1, 2.0)
+            left = speed if angle > 0 else -speed
+            client.drive_wheels(lwheel_speed=left, rwheel_speed=-left, duration=duration)
 
     # ------------------------------------------------------------------
     # Camera

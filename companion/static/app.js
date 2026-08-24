@@ -26,7 +26,7 @@ const I18N = {
     emotions: "Emotions", listening: "Listening...", pet: "Pet",
   },
 };
-let lang = "es";
+let lang = "en";
 const t = (k) => (I18N[lang] && I18N[lang][k]) || k;
 
 function applyI18n() {

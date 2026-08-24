@@ -41,7 +41,7 @@ class Config:
 
     host: str = field(default_factory=lambda: os.environ.get("COZMO_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.environ.get("COZMO_PORT", "8000")))
-    language: str = field(default_factory=lambda: os.environ.get("COZMO_LANG", "es"))
+    language: str = field(default_factory=lambda: os.environ.get("COZMO_LANG", "en"))
 
     ollama_url: str = field(
         default_factory=lambda: os.environ.get("COZMO_OLLAMA_URL", "http://localhost:11434")
