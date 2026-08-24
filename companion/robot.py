@@ -570,7 +570,9 @@ class Robot:
         np_im2 = np_im[::2]
         img = Image.fromarray(np_im2)
         client.enable_animations(True)
+        client.enable_procedural_face(False)
         client.display_image(img, duration=duration)
+        client.enable_procedural_face(True)
         client.enable_animations(False)
 
     # ------------------------------------------------------------------
