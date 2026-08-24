@@ -183,6 +183,11 @@ class Robot:
                 client.wait_for_robot()
             # Vigilancia de salud: cada RobotState refresca el timestamp.
             client.add_handler(pycozmo.protocol_encoder.RobotState, self._on_robot_state_tick)
+            # 禁用动画控制器：每帧(30fps)发 DisplayImage+OutputSilence 导致
+            # SendThread 队列塞满，ping 被延迟，Cozmo 30s 无响应就断开。
+            # 需要显示表情/图片时临时 enable_animations(True)。
+            client.enable_animations(False)
+            client.enable_procedural_face(False)
             with self._lock:
                 self._client = client
                 self._connected = True
@@ -399,9 +404,12 @@ class Robot:
         """Play a named animation; tolerates unknown names."""
         client = self._get_client()
         try:
+            client.enable_animations(True)
             client.play_anim(name)
         except Exception as e:  # noqa: BLE001
             log.warning("Animation %s failed: %s", name, e)
+        finally:
+            client.enable_animations(False)
 
     def set_lights(self, rgb: Tuple[int, int, int]) -> None:
         client = self._get_client()
@@ -437,6 +445,38 @@ class Robot:
             duration = self._clamp(abs(angle) / TURN_DEG_PER_SEC, 0.1, 2.0)
             left = speed if angle > 0 else -speed
             client.drive_wheels(lwheel_speed=left, rwheel_speed=-left, duration=duration)
+
+    # ------------------------------------------------------------------
+    # Screen
+    # ------------------------------------------------------------------
+
+    def display_text(self, text: str, duration: float = 5.0) -> None:
+        """在 Cozmo 屏幕上显示自定义文字。
+
+        Cozmo 屏幕 128x128 单色。用 PIL 渲染文字为图片，
+        临时启用动画控制器发送 DisplayImage，duration 秒后关闭。
+        """
+        client = self._get_client()
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+        except ImportError:
+            log.warning("PIL 未安装，无法显示文字")
+            return
+        img = Image.new("L", (128, 128), 0)
+        draw = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.load_default()
+        except Exception:
+            font = None
+        # 简单居中
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        x = max(0, (128 - tw) // 2)
+        y = max(0, (128 - th) // 2)
+        draw.text((x, y), text, fill=255, font=font)
+        client.enable_animations(True)
+        client.display_image(img, duration=duration)
+        client.enable_animations(False)
 
     # ------------------------------------------------------------------
     # Camera
