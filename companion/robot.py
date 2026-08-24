@@ -59,9 +59,11 @@ def _ping_loop(client) -> None:
 
 
 def _drive_watchdog(client) -> None:
-    """1 秒无新 DriveWheels 命令就自动 StopAllMotors。
+    """1 秒无新 DriveWheels 命令就自动停止轮子。
 
     防止用户松手后 Cozmo 继续运动。
+    用 DriveWheels(0, 0) 代替 StopAllMotors，因为 Cozmo 在
+    status=33553（direct drive 模式）下不响应 StopAllMotors。
     """
     global _last_drive_ts
     while not _watchdog_stop.is_set():
@@ -69,7 +71,7 @@ def _drive_watchdog(client) -> None:
             with _drive_lock:
                 last = _last_drive_ts
             if last > 0 and time.monotonic() - last > _DRIVE_TIMEOUT:
-                client.stop_all_motors()
+                client.drive_wheels(lwheel_speed=0.0, rwheel_speed=0.0)
                 with _drive_lock:
                     _last_drive_ts = 0.0
         except Exception:  # noqa: BLE001
