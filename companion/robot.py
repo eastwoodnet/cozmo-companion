@@ -350,8 +350,9 @@ class Robot:
     def drive(self, left: float, right: float, duration: float = 0.3) -> None:
         """Drive wheels at given speeds.
 
-        发 DriveWheels 包后等 50ms 让轮子加速，再发 StopAllMotors。
-        50ms 足够轮子从 0 加速到目标速度，移动距离明显。
+        发 DriveWheels 包，不立即 StopAllMotors。
+        StopAllMotors 会导致 Cozmo 进入 status=784 状态（~25% 时间），
+        不响应后续 DriveWheels 命令。让 Cozmo 自然停止。
         Cliff bit 设位时拒绝驱动，防止 Cozmo 在悬崖边继续前进。
         """
         if self._cliff_locked:
@@ -359,8 +360,6 @@ class Robot:
             return
         client = self._get_client()
         client.drive_wheels(lwheel_speed=float(left), rwheel_speed=float(right))
-        time.sleep(0.05)
-        client.stop_all_motors()
 
     def stop(self) -> None:
         client = self._get_client()
@@ -435,7 +434,6 @@ class Robot:
         self.set_lights((255, 80, 0))
         client.drive_wheels(lwheel_speed=100.0, rwheel_speed=-100.0)
         time.sleep(0.3)
-        client.stop_all_motors()
         client.drive_wheels(lwheel_speed=-100.0, rwheel_speed=100.0)
         time.sleep(0.3)
         client.stop_all_motors()
@@ -453,7 +451,7 @@ class Robot:
             left = speed if angle > 0 else -speed
             client.drive_wheels(lwheel_speed=left, rwheel_speed=-left)
             time.sleep(duration)
-            client.stop_all_motors()
+        client.stop_all_motors()
 
     # ------------------------------------------------------------------
     # Screen
