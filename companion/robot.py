@@ -465,9 +465,10 @@ class Robot:
                 client = self._get_client()
                 client.enable_animations(True)
                 client.play_audio(wav_path)
-                # 估算播放时长，用 Timer 延迟关闭动画（不阻塞线程池）
-                mp3_size = os.path.getsize(mp3_path)
-                duration = mp3_size / (16000 / 8)  # 16kbps
+                # 用 WAV 文件大小计算精确时长（22050Hz 16-bit mono = 44100 bytes/sec）
+                wav_size = os.path.getsize(wav_path)
+                duration = wav_size / 44100.0
+                log.info("TTS 时长: %.1f sec", duration)
                 timer = threading.Timer(duration + 0.5, client.enable_animations, args=(False,))
                 timer.daemon = True
                 timer.start()
@@ -549,16 +550,34 @@ class Robot:
             return
         img = Image.new("1", (128, 64), 0)
         draw = ImageDraw.Draw(img)
-        # 用 TTF 字体（16px），默认字体只有 8px 取偶数行后看不清
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoMono-Regular.ttf", 16)
-        except Exception:
-            try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", 16)
-            except Exception:
+        # 检测是否含中文，选择对应字体
+        has_cjk = any('\u4e00' <= c <= '\u9fff' for c in text)
+        if has_cjk:
+            # 中文字体：WenQuanYi Zen Hei（16px 取偶数行后 8px 可读）
+            font = None
+            for path in (
+                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+                "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            ):
+                try:
+                    font = ImageFont.truetype(path, 16)
+                    break
+                except Exception:
+                    continue
+            if font is None:
                 font = ImageFont.load_default()
-        # 简单居中（长文本截断到 12 字符，16px 字体 128px 宽放不下更多）
-        display_text = text[:12]
+        else:
+            # 英文字体：NotoMono
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoMono-Regular.ttf", 16)
+            except Exception:
+                try:
+                    font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", 16)
+                except Exception:
+                    font = ImageFont.load_default()
+        # 中文 16px 每字约 16px 宽，128px 最多 8 字；英文约 10px 宽，最多 12 字
+        max_chars = 8 if has_cjk else 12
+        display_text = text[:max_chars]
         bbox = draw.textbbox((0, 0), display_text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = max(0, (128 - tw) // 2)
