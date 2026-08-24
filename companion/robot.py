@@ -434,10 +434,14 @@ class Robot:
 
         gtts 生成 MP3，ffmpeg 转 WAV（22050Hz 16-bit mono），
         pycozmo play_audio() 播放。
+        自动检测文字语言：含中文字符用 zh-CN，否则用传入的 lang。
         """
         text = (text or "").strip()
         if not text:
             return
+        # 检测语言：含中文字符用 zh-CN
+        if any('\u4e00' <= c <= '\u9fff' for c in text):
+            lang = "zh-CN"
         try:
             from gtts import gTTS
             import tempfile, os, subprocess, time
