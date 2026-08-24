@@ -33,6 +33,13 @@ _PING_INTERVAL = 0.5
 _ping_stop = threading.Event()
 _ping_thread: Optional[threading.Thread] = None
 
+# 看门狗：1 秒无新 DriveWheels 命令就自动 StopAllMotors
+_DRIVE_TIMEOUT = 1.0
+_last_drive_ts = 0.0
+_drive_lock = threading.Lock()
+_watchdog_stop = threading.Event()
+_watchdog_thread: Optional[threading.Thread] = None
+
 
 def _ping_loop(client) -> None:
     """每 0.5s 发一个 Ping 包，保持 Cozmo 连接活跃。"""
@@ -49,6 +56,25 @@ def _ping_loop(client) -> None:
         except Exception:  # noqa: BLE001
             pass
         _ping_stop.wait(_PING_INTERVAL)
+
+
+def _drive_watchdog(client) -> None:
+    """1 秒无新 DriveWheels 命令就自动 StopAllMotors。
+
+    防止用户松手后 Cozmo 继续运动。
+    """
+    global _last_drive_ts
+    while not _watchdog_stop.is_set():
+        try:
+            with _drive_lock:
+                last = _last_drive_ts
+            if last > 0 and time.monotonic() - last > _DRIVE_TIMEOUT:
+                client.stop_all_motors()
+                with _drive_lock:
+                    _last_drive_ts = 0.0
+        except Exception:  # noqa: BLE001
+            pass
+        _watchdog_stop.wait(0.1)
 
 
 def _ensure_chunk_module() -> None:
@@ -195,10 +221,14 @@ class Robot:
                 self._last_state_ts = time.monotonic()
                 self._auto_reconnect = True
             # 启动独立 ping 线程，防止 pycozmo 内置 ping 延迟导致断开
-            global _ping_thread
+            global _ping_thread, _watchdog_thread
             _ping_stop.clear()
             _ping_thread = threading.Thread(target=_ping_loop, args=(client,), daemon=True)
             _ping_thread.start()
+            # 启动看门狗线程：1 秒无新 DriveWheels 命令就自动 StopAllMotors
+            _watchdog_stop.clear()
+            _watchdog_thread = threading.Thread(target=_drive_watchdog, args=(client,), daemon=True)
+            _watchdog_thread.start()
             ok, msg = True, "connected"
             log.info("Connected to Cozmo")
             # load_anims 在 aarch64 上很慢（find_file 对每个 pair 都 os.walk），
@@ -232,11 +262,15 @@ class Robot:
 
     def _teardown_client(self) -> None:
         """Stop the current client (if any) and clear the connection state."""
-        global _ping_thread
+        global _ping_thread, _watchdog_thread
         _ping_stop.set()
         if _ping_thread is not None:
             _ping_thread.join(timeout=2.0)
             _ping_thread = None
+        _watchdog_stop.set()
+        if _watchdog_thread is not None:
+            _watchdog_thread.join(timeout=2.0)
+            _watchdog_thread = None
         with self._lock:
             client, self._client = self._client, None
             self._connected = False
@@ -351,15 +385,17 @@ class Robot:
         """Drive wheels at given speeds.
 
         发 DriveWheels 包，不立即 StopAllMotors。
-        StopAllMotors 会导致 Cozmo 进入 status=784 状态（~25% 时间），
-        不响应后续 DriveWheels 命令。让 Cozmo 自然停止。
+        看门狗线程 1 秒无新命令就自动 StopAllMotors。
         Cliff bit 设位时拒绝驱动，防止 Cozmo 在悬崖边继续前进。
         """
+        global _last_drive_ts
         if self._cliff_locked:
             log.warning("Drive bloqueado: acantilado")
             return
         client = self._get_client()
         client.drive_wheels(lwheel_speed=float(left), rwheel_speed=float(right))
+        with _drive_lock:
+            _last_drive_ts = time.monotonic()
 
     def stop(self) -> None:
         client = self._get_client()
